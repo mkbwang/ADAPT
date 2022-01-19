@@ -1,3 +1,5 @@
+library(testthat)
+library(DiffRatio)
 library(extraDistr)
 
 covar1 = rep(c(0, 1), each=21)
@@ -28,5 +30,10 @@ for (id in 1:nrow(population)){
 colnames(population) <- c('Tax1_pop', 'Tax2_pop', 'Tax3_pop', 'Tax4_pop', 'Tax5_pop')
 colnames(counts) <- c('Tax1_count', 'Tax2_count', 'Tax3_count', 'Tax4_count', 'Tax5_count')
 
-alldata <- cbind(rep_conditions, population, counts, depth)
+testdata <- cbind(rep_conditions, population, counts, depth)
+reg_result <- dfr(data=testdata, covar=c("covar1", "covar2"), tpair=c("Tax1_count", "Tax2_count"))
 
+test_that("Logistic Regression working", {
+  expect_equal(reg_result$coefficients[['covar1']], 2, tolerance=1e-2)
+  expect_equal(reg_result$coefficients[['covar2']], -0.05, tolerance=1e-2)
+})
