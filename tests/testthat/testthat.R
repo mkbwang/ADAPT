@@ -1,39 +1,45 @@
 library(testthat)
 library(DiffRatio)
-library(extraDistr)
 
-covar1 = rep(c(0, 1), each=21)
-covar2 = rep(seq(-10, 10), 2)
+beta0 <- -0.5 # baseline average log odds
+beta1 <- 1.5 # average effect for each individual
 
-# taxa mean
-tax1_mean = round(exp(8.5+covar1 + 0.15*covar2))
-tax2_mean = round(exp(9.5-covar1 + 0.2*covar2))
-tax3_mean = round(rep(exp(8.5), 42))
-tax4_mean = round(rep(exp(9), 42))
-tax5_mean = round(rep(exp(10), 42))
+# add in random effects for each individual
+baseline_logodds <- rnorm(30, mean=beta0, sd=0.1)
+effect_logodds <- rnorm(15, mean=beta1, sd=0.1)
 
-allconditions = cbind(covar1, covar2, tax1_mean, tax2_mean, tax3_mean, tax4_mean, tax5_mean)
-rep_conditions <- allconditions[rep(seq_len(nrow(allconditions)), each = 20), ]
-population = matrix(0, 840, 5) # total abundance generated using negative binomial distribution
-counts = matrix(0, 840, 5) # sampled from multihypergeometric distribution
-depth <- round(rnorm(840, mean=15000, sd=1000)) # sequencing depth
+# log odds of two taxa of interest for 30 individuals
+logodds <- baseline_logodds + c(rep(0, 15), effect_logodds)
+proportions <- cbind(exp(logodds)/(1+exp(logodds)), 1/(1+exp(logodds)))
 
-for (id in 1:nrow(population)){
-  newsample <- rep(0, 5) # a new sample population
-  for (pos in 1:5){
-    newsample[pos] <- rnbinom(n=1, mu=rep_conditions[id, pos+2], size=1e5)
-  }
-  population[id,] <- newsample
-  counts[id, ]<- rmvhyper(1, newsample, depth[id])
+# take into account several other ignorant taxa
+full_proportions <- cbind(proportions * 0.4,
+                          t(replicate(30, c(0.15, 0.2, 0.25))))
+
+# read depths for each individual
+read_depths <- runif(30, min=7000, max=13000)
+
+# counts for each individual
+count_mat <- matrix(0, nrow=30, ncol=5)
+for (i in 1:nrow(count_mat)){
+  count_mat[i,] <- rmultinom(n=1, read_depths[i], full_proportions[i, ])
 }
 
-colnames(population) <- c('Tax1_pop', 'Tax2_pop', 'Tax3_pop', 'Tax4_pop', 'Tax5_pop')
-colnames(counts) <- c('Tax1_count', 'Tax2_count', 'Tax3_count', 'Tax4_count', 'Tax5_count')
+count_df <- as.data.frame(count_mat)
+colnames(count_df) <- c("taxa1", "taxa2", "taxa3", "taxa4", "taxa5")
+count_df$id <- seq(1, 30)
+count_df$X <- c(rep(0, 15), rep(1, 15))
 
-testdata <- cbind(rep_conditions, population, counts, depth)
-reg_result <- dfr(data=testdata, covar=c("covar1", "covar2"), tpair=c("Tax1_count", "Tax2_count"))
+
+# model <- glmer(cbind(taxa1, taxa2) ~ X + (1|id), data=count_df, family="binomial")
+# model2 <- glm(cbind(taxa1, taxa2) ~ X , data=count_df, family="binomial")
+# testdata <- cbind(rep_conditions, population, counts, depth)
+reg_result1 <- dfr(data=count_df, covar=c("X"), tpair=c("taxa1", "taxa2"))
+reg_result2 <- dfr(data=count_df, covar=c("X"), tpair=c("taxa1", "taxa2"), indveff="id")
 
 test_that("Logistic Regression working", {
-  expect_equal(reg_result$coefficients[['covar1']], 2, tolerance=1e-2)
-  expect_equal(reg_result$coefficients[['covar2']], -0.05, tolerance=1e-2)
+  expect_equal(reg_result1$coefficients[[1]], -0.5, tolerance=1e-1)
+  expect_equal(reg_result1$coefficients[[2]], 1.5, tolerance=1e-1)
+  expect_equal(reg_result2@beta[1], -0.5, tolerance=1e-1)
+  expect_equal(reg_result2@beta[2], 1.5, tolerance=1e-1)
 })

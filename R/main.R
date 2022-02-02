@@ -1,17 +1,25 @@
-
+library(lme4)
 #' dfr
 #'
 #' Differential Ratio Analysis
 #' @import stats
-#' @param data matrix or dataframe
+#' @param data dataframe
 #' @param covar name of covariates
 #' @param tpair names of taxa pairs
+#' @param indveff name of random effect level, optional
 #' @return logistic regression result
 #' @export
-dfr = function(data, covar, tpair){
-  covar_mat = cbind(1, data[,covar])
-  output = data[,tpair]
-  ratios = output[,1]/(output[,1]+output[,2])
-  reg_result <- glm.fit(x=covar_mat, y=ratios, family=quasibinomial(link = "logit"))
-  invisible(reg_result)
+dfr = function(data, covar, tpair, indveff=NULL){
+  response <- sprintf("cbind(%s, %s) ~ ", tpair[1], tpair[2])
+  covariates <- paste(covar, collapse='+')
+  model <- NULL
+  if (is.character(indveff)){ # the user offered individual level random effects
+    reffect <- sprintf('(1|%s)', indveff)
+    regfml <- formula(sprintf("%s %s + %s", response, covariates, reffect))
+    model <- lme4::glmer(regfml, data=data, family="binomial")# glmm
+  } else{
+    regfml <- formula(sprintf('%s%s', response, covariates))
+    model <- glm(regfml, data=data, family=binomial(link = "logit")) # glm
+  }
+  invisible(model)
 }
