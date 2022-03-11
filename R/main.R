@@ -6,20 +6,15 @@ library(lme4)
 #' @param data dataframe
 #' @param covar name of covariates
 #' @param tpair names of taxa pairs
-#' @param indveff name of random effect level, optional
 #' @return logistic regression result
 #' @export
-dfr = function(data, covar, tpair, indveff=NULL){
+dfr = function(data, covar, tpair){
+  data$sampleid <- seq(1, nrow(data)) # add a column representing sample id
   response <- sprintf("cbind(%s, %s) ~ ", tpair[1], tpair[2])
   covariates <- paste(covar, collapse='+')
   model <- NULL
-  if (is.character(indveff)){ # the user offered individual level random effects
-    reffect <- sprintf('(1|%s)', indveff)
-    regfml <- formula(sprintf("%s %s + %s", response, covariates, reffect))
-    model <- lme4::glmer(regfml, data=data, family="binomial")# glmm
-  } else{
-    regfml <- formula(sprintf('%s%s', response, covariates))
-    model <- glm(regfml, data=data, family=binomial(link = "logit")) # glm
-  }
+  reffect <- '(1|sampleid)'
+  regfml <- formula(sprintf("%s %s + %s", response, covariates, reffect))
+  model <- lme4::glmer(regfml, data=data, family="binomial")
   invisible(model)
 }

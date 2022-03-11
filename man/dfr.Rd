@@ -4,7 +4,7 @@
 \alias{dfr}
 \title{dfr}
 \usage{
-dfr(data, covar, tpair, indveff = NULL)
+dfr(data, covar, tpair)
 }
 \arguments{
 \item{data}{dataframe}
@@ -12,8 +12,6 @@ dfr(data, covar, tpair, indveff = NULL)
 \item{covar}{name of covariates}
 
 \item{tpair}{names of taxa pairs}
-
-\item{indveff}{name of random effect level, optional}
 }
 \value{
 logistic regression result
