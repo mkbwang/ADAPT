@@ -4,14 +4,16 @@
 \alias{dfr}
 \title{dfr}
 \usage{
-dfr(data, covar, tpair)
+dfr(phyloseq_data, tpair, covar, adjust = c())
 }
 \arguments{
-\item{data}{dataframe}
-
-\item{covar}{name of covariates}
+\item{phyloseq_data}{phyloseq data}
 
 \item{tpair}{names of taxa pairs}
+
+\item{covar}{name of covariates of interest}
+
+\item{adjust}{names of covariates of no interest}
 }
 \value{
 logistic regression result

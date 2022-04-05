@@ -25,15 +25,14 @@ for (i in 1:nrow(count_mat)){
   count_mat[i,] <- rmultinom(n=1, read_depths[i], full_proportions[i, ])
 }
 
-count_df <- as.data.frame(count_mat)
-colnames(count_df) <- c("taxa1", "taxa2", "taxa3", "taxa4", "taxa5")
-count_df$X <- c(rep(0, 15), rep(1, 15))
 
+colnames(count_mat) <- c("taxa1", "taxa2", "taxa3", "taxa4", "taxa5")
+count_mat <- otu_table(count_mat, taxa_are_rows = FALSE)
+X <- c(rep(0, 15), rep(1, 15))
+sample_info <- sample_data(data.frame(X))
+test_data <- phyloseq(count_mat, sample_info)
 
-# model <- glmer(cbind(taxa1, taxa2) ~ X + (1|id), data=count_df, family="binomial")
-# model2 <- glm(cbind(taxa1, taxa2) ~ X , data=count_df, family="binomial")
-# testdata <- cbind(rep_conditions, population, counts, depth)
-reg_result1 <- dfr(data=count_df, covar=c("X"), tpair=c("taxa1", "taxa2"))
+reg_result1 <- dfr(data=test_data, covar=c("X"), tpair=c("taxa1", "taxa2"))
 
 test_that("Logistic Regression working", {
   expect_equal(reg_result1$coefficients[[1]], -0.5, tolerance=1e-1)
