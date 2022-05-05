@@ -32,9 +32,11 @@ X <- c(rep(0, 15), rep(1, 15))
 sample_info <- sample_data(data.frame(X))
 test_data <- phyloseq(count_mat, sample_info)
 
-reg_result1 <- dfr(data=test_data, covar=c("X"), tpair=c("taxa1", "taxa2"))
+reg_result1 <- dfr(count_table=count_mat, sample_info=sample_info,
+                   covar=c("X"), tpair=c("taxa1", "taxa2")) |> summary()
+
 
 test_that("Logistic Regression working", {
-  expect_equal(reg_result1$coefficients[[1]], -0.5, tolerance=1e-1)
-  expect_equal(reg_result1$coefficients[[2]], 1.5, tolerance=1e-1)
+  expect_equal(reg_result1$coefficients[[1]], -0.5, tolerance=0.1)
+  expect_equal(reg_result1$coefficients[[2]], 1.5, tolerance=0.1)
 })
