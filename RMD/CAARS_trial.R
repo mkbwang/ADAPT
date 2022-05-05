@@ -47,6 +47,7 @@ filtered_count <- feature_summary$feature_table
 filtered_metadata <- feature_summary$meta_data
 struc_zero <- feature_summary$structure_zeros
 
+
 main_var = "asthma"; p_adj_method = "BH"; alpha = 0.05
 adj_formula = NULL; rand_formula = "~ 1 | indv"
 lme_control = list(maxIter = 100, msMaxIter = 100, opt = "optim")
@@ -55,5 +56,43 @@ lme_control = list(maxIter = 100, msMaxIter = 100, opt = "optim")
 res = ANCOM(filtered_count, filtered_metadata, struc_zero, main_var, p_adj_method,
             alpha, adj_formula, rand_formula, lme_control)
 
-adjusted_pvals <- res$q_data
+ANCOM_pvals <- res$p_data
+
+
+
+# run differential ratio analysis
+
+## focus on genuses with no structural zeros
+
+included_genus <- names(which(rowSums(struc_zero) == 0))
+taxa_pairs <- combn(included_genus, 2) %>% t() %>% as.data.frame()
+colnames(taxa_pairs) <- c("Taxa1", "Taxa2")
+taxa_pairs$ANCOM <- 0
+
+for (j in 1:nrow(taxa_pairs)){
+  t1 <- taxa_pairs$Taxa1[j]
+  t2 <- taxa_pairs$Taxa2[j]
+  taxa_pairs$ANCOM[j] <- ANCOM_pvals[t1, t2]
+}
+taxa_pairs$ANCOM_adjusted <- p.adjust(taxa_pairs$ANCOM, method="BH")
+pb = txtProgressBar(0, nrow(taxa_pairs), style = 3)
+taxa_pairs$dfr <- 0
+# count_table <- t(filtered_count)
+# data <- cbind(count_table[, c(t1, t2)], filtered_metadata[, 'asthma']) %>% as.data.frame()
+
+dfr_start <- proc.time()
+for (j in 1:nrow(taxa_pairs)){
+  setTxtProgressBar(pb, j)
+  t1 <- taxa_pairs$Taxa1[j]
+  t2 <- taxa_pairs$Taxa2[j]
+
+  glmm_result <- dfr(count_table=filtered_count, sample_info=filtered_metadata,
+                       covar=c("asthma"), tpair=c(t1, t2), reff="indv", taxa_are_rows = TRUE) |> summary()
+
+  taxa_pairs$dfr[j] <- glmm_result$coefficients[[8]]
+}
+dfr_end <- proc.time()
+
+taxa_pairs$ANCOM <- p.adjust(taxa_pairs$ANCOM, method='BH')
+taxa_pairs$dfr <- p.adjust(taxa_pairs$dfr, method='BH')
 

@@ -20,6 +20,7 @@ dfr = function(count_table, sample_info, tpair, covar, adjust=c(), reff=NULL, ta
     count_table <- t(count_table)
   }
   data <- cbind(count_table[, tpair], sample_info[, c(covar, adjust)]) |> as.data.frame()
+  colnames(data) <- c(tpair, covar, adjust) # reaffirm column names
   # set up the regression formula
   response <- sprintf("cbind(%s, %s) ~ ", tpair[1], tpair[2])
   covariates <- paste(c(covar, adjust), collapse='+')
@@ -29,6 +30,8 @@ dfr = function(count_table, sample_info, tpair, covar, adjust=c(), reff=NULL, ta
     data$sampleid <- seq(1, nrow(data))
     reffect <- '(1|sampleid)'
   } else{
+    data <- cbind(data, sample_info[, reff])
+    colnames(data)[ncol(data)] <- reff
     reffect <- sprintf('(1|%s)', reff)
   }
   regfml <- formula(sprintf("%s %s + %s", response, covariates, reffect))
