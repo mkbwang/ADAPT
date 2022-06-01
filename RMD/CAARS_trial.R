@@ -49,12 +49,13 @@ struc_zero <- feature_summary$structure_zeros
 
 
 main_var = "asthma"; p_adj_method = "BH"; alpha = 0.05
-adj_formula = NULL; rand_formula = "~ 1 | indv"
+adj_formula = NULL; rand_formula =  NULL # "~ 1 | indv"
+# assume that each sample comes from different individual for now
 lme_control = list(maxIter = 100, msMaxIter = 100, opt = "optim")
 
 # run ANCOM
 res = ANCOM(filtered_count, filtered_metadata, struc_zero, main_var, p_adj_method,
-            alpha, adj_formula, rand_formula, lme_control)
+            alpha, adj_formula, rand_formula) # , lme_control)
 
 ANCOM_pvals <- res$p_data
 
@@ -87,12 +88,87 @@ for (j in 1:nrow(taxa_pairs)){
   t2 <- taxa_pairs$Taxa2[j]
 
   glmm_result <- dfr(count_table=filtered_count, sample_info=filtered_metadata,
-                       covar=c("asthma"), tpair=c(t1, t2), reff="indv", taxa_are_rows = TRUE) |> summary()
+                       covar=c("asthma"), tpair=c(t1, t2), reff="SAMPLE_ID", taxa_are_rows = TRUE) |> summary()
 
   taxa_pairs$dfr[j] <- glmm_result$coefficients[[8]]
 }
 dfr_end <- proc.time()
 
-taxa_pairs$ANCOM <- p.adjust(taxa_pairs$ANCOM, method='BH')
+save(res, glmm_result, file="RMD/CAARS_data/models.RData")
+
+# taxa_pairs$ANCOM <- p.adjust(taxa_pairs$ANCOM, method='BH')
 taxa_pairs$dfr <- p.adjust(taxa_pairs$dfr, method='BH')
+
+ancom_positive_glmm_negative <- taxa_pairs %>% filter(ANCOM_adjusted < 0.05) %>% filter(dfr > 0.05)
+ancom_negative_glmm_positive <- taxa_pairs %>% filter(dfr < 0.05) %>% filter(ANCOM_adjusted > 0.05)
+choices <- c("No", "Yes")
+asthma_info <- choices[filtered_metadata$asthma +1]
+group.colors <- c(No="#177BB6", Yes="#B63817")
+
+
+
+genplot <- function(tpairs){
+  # retrieve the counts
+  counts <- filtered_count[tpairs, ] %>% t()
+
+  # calculate the log ratios
+  logratio <- log(counts[, 1] + 1) - log(counts[, 2] + 1)
+
+  # simplify the taxon names
+  taxa1 <- strsplit(tpairs[1], split='_') %>% unlist() %>% tail(n=1)
+  taxa2 <- strsplit(tpairs[2], split='_') %>% unlist() %>% tail(n=1)
+
+  # set up dataframe
+  information <- cbind(counts, logratio) %>% as.data.frame()
+  colnames(information) <- c(taxa1, taxa2, "LogCountDiff")
+  information$Asthma <- asthma_info # add asthma information
+  information$Asthma <- as.factor(information$Asthma)
+
+  scatter_plot <- ggplot(information, aes_string(x=taxa1, y=taxa2, color="Asthma")) +
+    geom_point(position="jitter", size=0.7) + scale_colour_manual(values = group.colors) +
+    xlab(taxa1) + ylab(taxa2)
+
+  violin_plot <- ggplot(information, aes(x=Asthma, y=LogCountDiff)) + geom_violin() +
+    stat_summary(fun=median, geom="point", size=2, color="red") +
+    ylab("Log Count Difference")
+
+  combined_plot <- plot_grid(scatter_plot, violin_plot, ncol=1)
+
+  return(list(data = information,
+    filename = sprintf('%s_%s.pdf', taxa1, taxa2),
+              plotobj = combined_plot))
+}
+
+
+
+for (i in 1:nrow(ancom_positive_glmm_negative)){
+
+  selected_tpairs <- c(ancom_positive_glmm_negative$Taxa1[i],
+                       ancom_positive_glmm_negative$Taxa2[i])
+
+  newplot <- genplot(selected_tpairs)
+  file_fullname <- file.path('RMD', 'CAARS_Model_Summary',
+                             'ancom_positive_glmm_negative',
+                             newplot$filename)
+
+  ggsave(file_fullname, newplot$plotobj, width=12, height=16,
+         units='cm')
+
+}
+
+for (i in 1:nrow(ancom_negative_glmm_positive)){
+
+  selected_tpairs <- c(ancom_negative_glmm_positive$Taxa1[i],
+                       ancom_negative_glmm_positive$Taxa2[i])
+
+  newplot <- genplot(selected_tpairs)
+  file_fullname <- file.path('RMD', 'CAARS_Model_Summary',
+                             'ancom_negative_glmm_positive',
+                             newplot$filename)
+
+  ggsave(file_fullname, newplot$plotobj, width=12, height=16,
+         units='cm')
+
+}
+
 

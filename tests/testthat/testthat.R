@@ -1,5 +1,6 @@
 library(testthat)
 library(DiffRatio)
+library(phyloseq)
 
 beta0 <- -0.5 # baseline average log odds
 beta1 <- 1.5 # average effect for each individual
