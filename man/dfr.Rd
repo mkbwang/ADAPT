@@ -11,7 +11,9 @@ dfr(
   covar,
   adjust = c(),
   reff = NULL,
-  taxa_are_rows = FALSE
+  taxa_are_rows = FALSE,
+  nAGQ = 1L,
+  optimizer = "bobyqa"
 )
 }
 \arguments{
@@ -28,6 +30,10 @@ dfr(
 \item{reff}{random effect level}
 
 \item{taxa_are_rows}{indicator of whether the count table has taxa on row}
+
+\item{nAGQ}{number of points for approximating log likelihood}
+
+\item{optimizer}{optimizer for computation, bobyqa(default) or nloptwrap}
 }
 \value{
 logistic regression result

@@ -5,6 +5,8 @@ library(phyloseq)
 library(doParallel)
 library(dplyr)
 library(nlme)
+library(cowplot)
+library(ggplot2)
 library(igraph)
 
 rm(list=ls())
@@ -88,7 +90,8 @@ for (j in 1:nrow(taxa_pairs)){
   t2 <- taxa_pairs$Taxa2[j]
 
   glmm_result <- dfr(count_table=filtered_count, sample_info=filtered_metadata,
-                       covar=c("asthma"), tpair=c(t1, t2), reff="SAMPLE_ID", taxa_are_rows = TRUE) |> summary()
+                       covar=c("asthma"), tpair=c(t1, t2), reff="SAMPLE_ID", taxa_are_rows = TRUE,
+                     nAGQ = 10L, optimizer = "bobyqa") |> summary()
 
   taxa_pairs$dfr[j] <- glmm_result$coefficients[[8]]
 }
@@ -97,10 +100,12 @@ dfr_end <- proc.time()
 save(res, glmm_result, file="RMD/CAARS_data/models.RData")
 
 # taxa_pairs$ANCOM <- p.adjust(taxa_pairs$ANCOM, method='BH')
-taxa_pairs$dfr <- p.adjust(taxa_pairs$dfr, method='BH')
+taxa_pairs$dfr_adjusted <- p.adjust(taxa_pairs$dfr, method='BH')
 
-ancom_positive_glmm_negative <- taxa_pairs %>% filter(ANCOM_adjusted < 0.05) %>% filter(dfr > 0.05)
-ancom_negative_glmm_positive <- taxa_pairs %>% filter(dfr < 0.05) %>% filter(ANCOM_adjusted > 0.05)
+write.csv(taxa_pairs, 'RMD/CAARS_Model_Summary/Pvals.csv', row.names = FALSE)
+
+ancom_positive_glmm_negative <- taxa_pairs %>% filter(ANCOM_adjusted < 0.05) %>% filter(dfr_adjusted > 0.05)
+ancom_negative_glmm_positive <- taxa_pairs %>% filter(dfr_adjusted < 0.05) %>% filter(ANCOM_adjusted > 0.05)
 choices <- c("No", "Yes")
 asthma_info <- choices[filtered_metadata$asthma +1]
 group.colors <- c(No="#177BB6", Yes="#B63817")

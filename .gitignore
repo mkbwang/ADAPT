@@ -9,3 +9,5 @@
 *_data/
 *.html
 *.pdf
+*.csv
+*_Model_Summary/

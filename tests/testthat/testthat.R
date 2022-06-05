@@ -34,7 +34,7 @@ sample_info <- sample_data(data.frame(X))
 test_data <- phyloseq(count_mat, sample_info)
 
 reg_result1 <- dfr(count_table=count_mat, sample_info=sample_info,
-                   covar=c("X"), tpair=c("taxa1", "taxa2")) |> summary()
+                   covar=c("X"), tpair=c("taxa1", "taxa2"), nAGQ = 5) |> summary()
 
 
 test_that("Logistic Regression working", {

@@ -10,9 +10,14 @@
 #' @param tpair names of taxa pairs
 #' @param reff random effect level
 #' @param taxa_are_rows indicator of whether the count table has taxa on row
+#' @param nAGQ number of points for approximating log likelihood
+#' @param optimizer optimizer for computation, bobyqa(default) or nloptwrap
 #' @return logistic regression result
 #' @export
-dfr = function(count_table, sample_info, tpair, covar, adjust=c(), reff=NULL, taxa_are_rows=FALSE){
+dfr = function(count_table, sample_info, tpair, covar, adjust=c(), reff=NULL,
+               taxa_are_rows=FALSE,
+               nAGQ = 1L,
+               optimizer = "bobyqa"){
 
   # extract the OTU counts and the sample information from the phyloseq data
   # otu_counts <- phyloseq::otu_table(phyloseq_data)
@@ -35,6 +40,8 @@ dfr = function(count_table, sample_info, tpair, covar, adjust=c(), reff=NULL, ta
     reffect <- sprintf('(1|%s)', reff)
   }
   regfml <- formula(sprintf("%s %s + %s", response, covariates, reffect))
-  model <- lme4::glmer(regfml, data=data, family="binomial")
+  model <- lme4::glmer(regfml, data=data, family="binomial", nAGQ = nAGQ,
+                       control=lme4::glmerControl(optimizer=optimizer,
+                                            optCtrl=list(maxfun=2e5)))
   invisible(model)
 }
