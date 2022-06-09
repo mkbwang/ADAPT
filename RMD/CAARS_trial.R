@@ -79,9 +79,21 @@ for (j in 1:nrow(taxa_pairs)){
 }
 taxa_pairs$ANCOM_adjusted <- p.adjust(taxa_pairs$ANCOM, method="BH")
 pb = txtProgressBar(0, nrow(taxa_pairs), style = 3)
-taxa_pairs$dfr <- 0
+taxa_pairs$dfr_NM_0 <- 0
+taxa_pairs$dfr_NM_1 <- 0
+taxa_pairs$dfr_NM_10 <- 0
+taxa_pairs$dfr_bobyqa_0 <- 0
+taxa_pairs$dfr_bobyqa_1 <- 0
+taxa_pairs$dfr_bobyqa_10 <- 0
 # count_table <- t(filtered_count)
 # data <- cbind(count_table[, c(t1, t2)], filtered_metadata[, 'asthma']) %>% as.data.frame()
+
+NM_0_failedpairs = list()
+NM_1_failedpairs = list()
+NM_10_failedpairs = list()
+bobyqa_0_failedpairs = list()
+bobyqa_1_failedpairs = list()
+bobyqa_10_failedpairs = list()
 
 dfr_start <- proc.time()
 for (j in 1:nrow(taxa_pairs)){
@@ -89,18 +101,115 @@ for (j in 1:nrow(taxa_pairs)){
   t1 <- taxa_pairs$Taxa1[j]
   t2 <- taxa_pairs$Taxa2[j]
 
-  glmm_result <- dfr(count_table=filtered_count, sample_info=filtered_metadata,
+  # nelder mead, nagq=0
+  tryCatch({
+    glmm_NM_0 <- dfr(count_table=filtered_count, sample_info=filtered_metadata,
                        covar=c("asthma"), tpair=c(t1, t2), reff="SAMPLE_ID", taxa_are_rows = TRUE,
-                     nAGQ = 10L, optimizer = "bobyqa") |> summary()
+                       nAGQ = 0L, optimizer = "Nelder_Mead") |> summary()
+  },
+  warning = function(cond){
+    NM_0_failedpairs[[length(NM_0_failedpairs) + 1]] <- c(t1, t2)
+  },
+  finally = {
+    taxa_pairs$dfr_NM_0[j] <- glmm_NM_0$coefficients[[8]]
+  })
 
-  taxa_pairs$dfr[j] <- glmm_result$coefficients[[8]]
+  # nelder mead, nagq=1
+  tryCatch({
+    glmm_NM_1 <- dfr(count_table=filtered_count, sample_info=filtered_metadata,
+                     covar=c("asthma"), tpair=c(t1, t2), reff="SAMPLE_ID", taxa_are_rows = TRUE,
+                     nAGQ = 1L, optimizer = "Nelder_Mead") |> summary()
+  },
+  warning = function(cond){
+    NM_1_failedpairs[[length(NM_1_failedpairs) + 1]] <- c(t1, t2)
+  },
+  finally = {
+    taxa_pairs$dfr_NM_1[j] <- glmm_NM_1$coefficients[[8]]
+  })
+
+  # nelder mead, nagq=10
+  tryCatch({
+    glmm_NM_10 <- dfr(count_table=filtered_count, sample_info=filtered_metadata,
+                     covar=c("asthma"), tpair=c(t1, t2), reff="SAMPLE_ID", taxa_are_rows = TRUE,
+                     nAGQ = 10L, optimizer = "Nelder_Mead") |> summary()
+  },
+  warning = function(cond){
+    NM_10_failedpairs[[length(NM_1_failedpairs) + 1]] <- c(t1, t2)
+  },
+  finally = {
+    taxa_pairs$dfr_NM_10[j] <- glmm_NM_1$coefficients[[8]]
+  })
+
+  # bobyqa, nagq=0
+  tryCatch({
+    glmm_bobyqa_0 <- dfr(count_table=filtered_count, sample_info=filtered_metadata,
+                     covar=c("asthma"), tpair=c(t1, t2), reff="SAMPLE_ID", taxa_are_rows = TRUE,
+                     nAGQ = 0L, optimizer = "bobyqa") |> summary()
+  },
+  warning = function(cond){
+    bobyqa_0_failedpairs[[length(bobyqa_0_failedpairs) + 1]] <- c(t1, t2)
+  },
+  finally = {
+    taxa_pairs$dfr_bobyqa_0[j] <- glmm_bobyqa_0$coefficients[[8]]
+  })
+
+  # bobyqa, nagq=1
+  tryCatch({
+    glmm_bobyqa_1 <- dfr(count_table=filtered_count, sample_info=filtered_metadata,
+                         covar=c("asthma"), tpair=c(t1, t2), reff="SAMPLE_ID", taxa_are_rows = TRUE,
+                         nAGQ = 1L, optimizer = "bobyqa") |> summary()
+  },
+  warning = function(cond){
+    bobyqa_1_failedpairs[[length(bobyqa_1_failedpairs) + 1]] <- c(t1, t2)
+  },
+  finally = {
+    taxa_pairs$dfr_bobyqa_1[j] <- glmm_bobyqa_1$coefficients[[8]]
+  })
+
+  # bobyqa, nagq=10
+  tryCatch({
+    glmm_bobyqa_10 <- dfr(count_table=filtered_count, sample_info=filtered_metadata,
+                         covar=c("asthma"), tpair=c(t1, t2), reff="SAMPLE_ID", taxa_are_rows = TRUE,
+                         nAGQ = 10L, optimizer = "bobyqa") |> summary()
+  },
+  warning = function(cond){
+    bobyqa_10_failedpairs[[length(bobyqa_10_failedpairs) + 1]] <- c(t1, t2)
+  },
+  finally = {
+    taxa_pairs$dfr_bobyqa_10[j] <- glmm_bobyqa_10$coefficients[[8]]
+  })
 }
 dfr_end <- proc.time()
 
-save(res, glmm_result, file="RMD/CAARS_data/models.RData")
+# identify three example pair of taxa whose p value is very different between different algorithms
+pvals_mat <- taxa_pairs[, c("dfr_NM_0", "dfr_NM_1", "dfr_NM_10", "dfr_bobyqa_0",
+                            "dfr_bobyqa_1", "dfr_bobyqa_10")]
+
+pval_var <- apply(pvals_mat, 1, var)
+tpair_pval_rank <- length(pval_var) + 1 - rank(pval_var)
+rowids <- which(tpair_pval_rank %in% seq(1, 10))
+selected_pairs <- taxa_pairs[rowids, ]
+
+example1 <- selected_pairs[5, c(1,2)] %>% as.vector() %>% unname() %>% unlist()
+example2 <- selected_pairs[6, c(1,2)] %>% as.vector() %>% unname() %>% unlist()
+example3 <- selected_pairs[7, c(1,2)] %>% as.vector() %>% unname() %>% unlist()
+
+df_example1 <- cbind(filtered_metadata[,c('SAMPLE_ID', 'asthma')], t(filtered_count[example1, ])) %>%
+  as.data.frame()
+colnames(df_example1) <- c("ID", "X", "Taxa1", "Taxa2")
+df_example2 <- cbind(filtered_metadata[,c('SAMPLE_ID', 'asthma')], t(filtered_count[example2, ])) %>%
+  as.data.frame()
+colnames(df_example2) <- c("ID", "X", "Taxa3", "Taxa4")
+df_example3 <- cbind(filtered_metadata[,c('SAMPLE_ID', 'asthma')], t(filtered_count[example3, ])) %>%
+  as.data.frame()
+colnames(df_example3) <- c("ID", "X", "Taxa5", "Taxa6")
+
+write.csv(df_example1, 'RMD/CAARS_Model_Summary/example1.csv', row.names=FALSE)
+write.csv(df_example2, 'RMD/CAARS_Model_Summary/example2.csv', row.names=FALSE)
+write.csv(df_example3, 'RMD/CAARS_Model_Summary/example3.csv', row.names=FALSE)
 
 # taxa_pairs$ANCOM <- p.adjust(taxa_pairs$ANCOM, method='BH')
-taxa_pairs$dfr_adjusted <- p.adjust(taxa_pairs$dfr, method='BH')
+taxa_pairs$dfr_adjusted <- p.adjust(taxa_pairs$dfr_NM_10, method='BH')
 
 write.csv(taxa_pairs, 'RMD/CAARS_Model_Summary/Pvals.csv', row.names = FALSE)
 
