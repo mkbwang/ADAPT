@@ -1,4 +1,5 @@
 library(lme4)
+library(DiffRatio)
 
 # case study
 
@@ -41,64 +42,147 @@ filtered_count <- feature_summary$feature_table
 filtered_metadata <- feature_summary$meta_data
 struc_zero <- feature_summary$structure_zeros
 
-# select a specific pair
+taxa_w_struczero <- rowSums(struc_zero)
+retained_rows <- which(taxa_w_struczero == 0)
 
-Lentimicrobium_Filifactor_count <- filtered_count[c('g__Lentimicrobium',
-                                                    'g__Filifactor'), ] %>% t() %>%
-  as.data.frame()
-Lentimicrobium_Filifactor = cbind(Lentimicrobium_Filifactor_count, filtered_metadata)
-write.csv(Lentimicrobium_Filifactor, 'RMD/CAARS_data/Lentimicrobium_Filifactor.csv',
-          row.names=FALSE)
-
-data <- read.csv('RMD/CAARS_data/Lentimicrobium_Filifactor.csv')
-data_replicate <- data
+filtered_count_no_struc_zero <- filtered_count[retained_rows, ]
+filtered_count_no_struc_zero[is.na(filtered_count_no_struc_zero)] <- 0
+filtered_count_no_struc_zero <- t(filtered_count_no_struc_zero) %>% as.data.frame()
 
 
-## for ancom, we need to impute zeros first
-lenti <- data$g__Lentimicrobium
-lenti[lenti==0] <- 1
-filifactor <- data$g__Filifactor
-filifactor[filifactor==0] <- 1
-data_replicate$g__Lentimicrobium <- lenti
-data_replicate$g__Filifactor <- filifactor
-
-data_replicate$logratio <- log(data_replicate$g__Lentimicrobium) - log(data_replicate$g__Filifactor)
-
-## Wilcoxon rank-sum test
-wilx_test <- wilcox.test(logratio~asthma, data=data_replicate)
-wilx_pval <- wilx_test$p.value
-
-## T test
-t_test <- t.test(logratio ~ asthma, data=data_replicate)
-t_pval <- t_test$p.value
-
-## Logistic Regression
-glm_result <- glm(cbind(g__Lentimicrobium, g__Filifactor) ~ asthma, data=data,
-                  family = binomial(link = "logit"))
-### hand calculation
-asthma_patients <- data %>% filter(asthma == 1)
-healthy_patients <- data %>% filter(asthma == 0)
-
-healthy_lenti_count <- sum(healthy_patients$g__Lentimicrobium)
-healthy_filifactor_count <- sum(healthy_patients$g__Filifactor)
-asthma_lenti_count <- sum(asthma_patients$g__Lentimicrobium)
-asthma_filifactor_count <- sum(asthma_patients$g__Filifactor)
-
-glm_intercept <- log(healthy_lenti_count/
-                       healthy_filifactor_count)
-sd_glm_intercept <- sqrt(1/healthy_lenti_count + 1/healthy_filifactor_count)
-
-glm_asthma_effect <- log(asthma_lenti_count/
-                           asthma_filifactor_count) -
-  glm_intercept
-sd_glm_asthma <- sqrt(1/healthy_lenti_count + 1/healthy_filifactor_count+
-                        1/asthma_lenti_count + 1/asthma_filifactor_count)
+write.csv(filtered_count_no_struc_zero, file.path(folder, 'filtered_count.csv'),
+          row.names = FALSE)
+write.csv(filtered_metadata, file.path(folder, 'filtered_metadata.csv'), row.names=FALSE)
 
 
-## GLMM
-glmm_result <- glmer(cbind(g__Lentimicrobium, g__Filifactor) ~ asthma + (1|SAMPLE_ID), data=data,
-                     family = binomial(link = "logit"), nAGQ=5L,
-                     control=glmerControl(optimizer="bobyqa",
-                                          optCtrl=list(maxfun=2e5))) # nAGQ is a big issue
 
-## other methods: nloptwrap
+####---------------------------------------
+# Comparison of different algorithms
+
+rm(list=ls())
+data_folder <- 'RMD/CAARS_data'
+model_folder <- 'RMD/CAARS_Model_Summary'
+counts_table <- read.csv(file.path(data_folder, 'filtered_count.csv'))
+metadata <- read.csv(file.path(data_folder, 'filtered_metadata.csv'))
+
+taxa_names <- colnames(counts_table)
+taxa_pairs <- combn(taxa_names, 2) %>% t()
+
+pvals_result <- as.data.frame(taxa_pairs)
+colnames(pvals_result) <- c("Taxa1", "Taxa2")
+pvals_result$wilx <- 0
+pvals_result$ttest <- 0
+
+# raise all values by one
+shifted_counts_table <- counts_table + 1
+asthma_info <- metadata$asthma
+sample_id <- metadata$SAMPLE_ID
+
+for (j in 1:nrow(pvals_result)){
+  # generate a subset dataframe
+  t1_name <- pvals_result$Taxa1[j]
+  t2_name <- pvals_result$Taxa2[j]
+  subset_data <- cbind(shifted_counts_table[, t1_name],
+                       shifted_counts_table[, t2_name],
+                       asthma_info) %>% as.data.frame()
+  colnames(subset_data) <- c(t1_name, t2_name, "Asthma")
+  subset_data$logratio <- log(subset_data[, t1_name])-log(subset_data[, t2_name])
+
+  # wilcoxon test
+  wilx_test <- wilcox.test(logratio~Asthma, data=subset_data)
+  pvals_result$wilx[j] <- wilx_test$p.value
+
+  # t test
+  t_test <- t.test(logratio~Asthma, data=subset_data)
+  pvals_result$ttest[j] <- t_test$p.value
+}
+
+pvals_result$GLMM_PIRLS <- 0
+pvals_result$GLMM_LA_NM <- 0
+pvals_result$GLMM_LA_BOBYQA <- 0
+pvals_result$GLMM_GQ_NM <- 0
+pvals_result$GLMM_GQ_BOBYQA <- 0
+
+# keep track of taxa pairs that have convergence failure warning
+PIRLS_failedpairs = list()
+LA_NM_failedpairs = list()
+LA_BOBYQA_failedpairs = list()
+GQ_NM_failedpairs = list()
+GQ_BOBYQA_failedpairs = list()
+
+for (j in 1:nrow(pvals_result)){
+  t1 <- pvals_result$Taxa1[j]
+  t2 <- pvals_result$Taxa2[j]
+
+  # penalized iteratively reweighted least squares
+  tryCatch({
+    glmm_PIRLS_model <- dfr(count_table=counts_table, sample_info=metadata,
+                     covar=c("asthma"), tpair=c(t1, t2), reff="SAMPLE_ID", taxa_are_rows = FALSE,
+                     nAGQ = 0L) |> summary()
+  },
+  warning = function(cond){
+    PIRLS_failedpairs[[length(PIRLS_failedpairs) + 1]] <- c(t1, t2)
+  },
+  finally = {
+    pvals_result$GLMM_PIRLS[j] <- glmm_PIRLS_model$coefficients[[8]]
+  })
+
+  # nelder mead, LA
+  tryCatch({
+    glmm_NM_LA <- dfr(count_table=counts_table, sample_info=metadata,
+                     covar=c("asthma"), tpair=c(t1, t2), reff="SAMPLE_ID", taxa_are_rows = FALSE,
+                     nAGQ = 1L, optimizer = "Nelder_Mead") |> summary()
+  },
+  warning = function(cond){
+    LA_NM_failedpairs[[length(LA_NM_failedpairs) + 1]] <- c(t1, t2)
+  },
+  finally = {
+    pvals_result$GLMM_LA_NM[j] <-glmm_NM_LA$coefficients[[8]]
+  })
+
+  # nelder mead, nagq=10
+  tryCatch({
+    glmm_NM_GQ <- dfr(count_table=counts_table, sample_info=metadata,
+                      covar=c("asthma"), tpair=c(t1, t2), reff="SAMPLE_ID", taxa_are_rows = FALSE,
+                      nAGQ = 10L, optimizer = "Nelder_Mead") |> summary()
+  },
+  warning = function(cond){
+    GQ_NM_failedpairs[[length(GQ_NM_failedpairs) + 1]] <- c(t1, t2)
+  },
+  finally = {
+    pvals_result$GLMM_GQ_NM[j] <- glmm_NM_GQ$coefficients[[8]]
+  })
+
+  # bobyqa, LA
+  tryCatch({
+    glmm_bobyqa_LA <- dfr(count_table=counts_table, sample_info=metadata,
+                         covar=c("asthma"), tpair=c(t1, t2), reff="SAMPLE_ID", taxa_are_rows = FALSE,
+                         nAGQ = 1L, optimizer = "bobyqa") |> summary()
+  },
+  warning = function(cond){
+    LA_BOBYQA_failedpairs[[length(LA_BOBYQA_failedpairs) + 1]] <- c(t1, t2)
+  },
+  finally = {
+    pvals_result$GLMM_LA_BOBYQA[j] <- glmm_bobyqa_LA$coefficients[[8]]
+  })
+
+  # bobyqa, nagq=10
+  tryCatch({
+    glmm_bobyqa_GQ <- dfr(count_table=counts_table, sample_info=metadata,
+                          covar=c("asthma"), tpair=c(t1, t2), reff="SAMPLE_ID", taxa_are_rows = FALSE,
+                          nAGQ = 10L, optimizer = "bobyqa") |> summary()
+  },
+  warning = function(cond){
+    GQ_BOBYQA_failedpairs[[length(GQ_BOBYQA_failedpairs) + 1]] <- c(t1, t2)
+  },
+  finally = {
+    pvals_result$GLMM_GQ_BOBYQA[j] <- glmm_bobyqa_GQ$coefficients[[8]]
+  })
+}
+
+write.csv(pvals_result, file.path('RMD/CAARS_Model_Summary', 'Pvals.csv'), row.names=FALSE)
+
+
+
+
+
