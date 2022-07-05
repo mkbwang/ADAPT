@@ -50,3 +50,4 @@ for (j in 1:nrow(taxa_pairs)){
 }
 
 taxa_pairs$adjustedp <- p.adjust(taxa_pairs$pval, method='BH')
+write.csv(taxa_pairs, 'RMD/CAARS_Model_Summary/fisher_test.csv', row.names = FALSE)
