@@ -104,22 +104,25 @@ print( res1 )
 
 # prepare X matrix and V diagonal matrix, maximize B
 
-proflik <- function(B, V, uu, K, X){
-  R <- B+V
+
+
+invXRX <- function(xmat, invR){
+  XRX <- t(xmat) %*% invR %*% xvecs
+  eigen_result <- eigen(XRX)
+  return (eigen_result$vectors %*% diag(1/eigen_result$values) %*% t(eigen_result$vectors))
+}
+
+proflik <- function(B_scalar, V_vec, u_vec, X_mat){
+  R <- B_scalar + V_vec
+  K <- length(V_vec)
   invmatR <- diag(1/R)
-
-  invXRX <- function(xvecs, invR){
-    XRX <- t(xvecs) %*% invR %*% xvecs
-    eigen_result <- eigen(XRX)
-    return (eigen_result$vectors %*% diag(1/eigen_result$values) %*% t(eigen_result$vectors))
-  }
-  URX <- t(uu) %*% invmatR %*% X
-
-  URU <- t(uu) %*% invmatR %*% uu
-
-  result <- sum(log(R)) + K * log(URU - URX %*% invXRX(X, invmatR) %*% t(URX))
+  XRX_inv <- invXRX(X_mat, invmatR)
+  URX <- t(u_vec) %*% invmatR %*% X
+  URU <- t(u_vec) %*% invmatR %*% u_vec
+  result <- sum(log(R)) + K * log(URU - URX %*% XRX_inv %*% t(URX))
   return(as.vector(result))
 }
+
 
 UU0 <- c(7,3,6,5)
 V0 <- c(2,5,3,6)
