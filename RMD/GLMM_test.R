@@ -7,7 +7,7 @@ covariate_mat <- cbind(1, runif(100, min=-1.5, max=1.5), runif(100, min=-2, max=
 randeff <- rnorm(100, 3)
 logodds <- covariate_mat %*% sythetic_effsizes + randeff
 prob <- 1 / (1 + exp(-logodds))
-population <- floor(runif(100, min=50, max=100))
+population <- floor(runif(100, min=10, max=25))
 
 
 # generate long format
@@ -34,13 +34,30 @@ lme4model <- glmer(Y ~ X1 + X2 + (1|ID), data=df, family="binomial",
 glm_model <- glm(Y ~ X1 + X2, data=df, family="binomial")
 
 beta <- glm_model$coefficients
-b <- rep(0, nrow(df))
-eta <- as.vector(beta[1] + as.matrix(df[, c('X1', 'X2')]) %*% beta[c(2,3)]) + b
-pi <- 1/(1+exp(-eta))
-weights <- pi*(1-pi)
-df$weight <- weights
-u_vec <- eta + (df$Y - pi) / weights
-df$U <- u_vec
+b <- rep(0, length(unique(df$ID)))
+t <- 0
+
+repeat{
+  {
+    eta <- beta[1] + rep(b, times=population) + as.vector(as.matrix(df[, c('X1', 'X2')]) %*% beta[c(2,3)])
+    pi <- 1/(1+exp(-eta))
+    weights <- pi*(1-pi)
+    df$weight <- weights
+    u_vec <- eta + (df$Y - pi) / weights
+    df$U <- u_vec
+    lmix_model <- lmer(U ~ X1+X2 + (1|ID), data=df, weights = weight, REML=FALSE)
+    new_beta <- fixef(lmix_model) %>% unname()
+    b <- ranef(lmix_model)[[1]][[1]]
+    t <- t+1
+  };
+  if(norm(new_beta - beta, type='2') < 0.0001){
+    break;
+  } else{
+    beta <- new_beta
+  }
+}
+
+
 
 lmix_model <- lmer(U ~ X1+X2 + (1|ID), data=df, weights = weight, REML=FALSE)
 rand_intercepts <- ranef(lmix_model)
