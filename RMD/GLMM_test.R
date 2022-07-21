@@ -1,37 +1,37 @@
 library(lme4)
 library(dplyr)
 
-rm(list=ls())
+source('RMD/preprocess.R')
 set.seed(2022)
-sythetic_effsizes <- c(1.2, -1.3)
-covariate_mat <- cbind(rbinom(100, 1, 0.5), rbinom(100, 1, 0.5))
+# sythetic_effsizes <- c(1.2, -1.3)
+# covariate_mat <- cbind(rbinom(100, 1, 0.5), rbinom(100, 1, 0.5))
 
 ### random effects generated from two Gaussian mixtures
-mixcomp1 <- rnorm(100, mean=-2, sd=0.4)
-mixcomp2 <- rnorm(100, mean=2, sd=0.4)
-selector <- rbinom(100, 1, prob=0.5)
-randeff <- rep(0, 100)
-randeff[selector == 0] <- mixcomp1[selector == 0]
-randeff[selector == 1] <- mixcomp2[selector == 1]
+# mixcomp1 <- rnorm(100, mean=-2, sd=0.4)
+# mixcomp2 <- rnorm(100, mean=2, sd=0.4)
+# selector <- rbinom(100, 1, prob=0.5)
+# randeff <- rep(0, 100)
+# randeff[selector == 0] <- mixcomp1[selector == 0]
+# randeff[selector == 1] <- mixcomp2[selector == 1]
 
 
-logodds <- 0.05 + covariate_mat %*% sythetic_effsizes + randeff
-prob <- 1 / (1 + exp(-logodds))
-population <- floor(runif(100, min=10, max=25))
-
+# logodds <- 0.05 + covariate_mat %*% sythetic_effsizes + randeff
+# prob <- 1 / (1 + exp(-logodds))
+# population <- floor(runif(100, min=10, max=25))
+#
 
 # generate data
 
-ID <- seq(1, 100)
-positive <- rep(0, length(ID))
-negative <- rep(0, length(ID))
-for (j in 1:length(ID)){
-  positive[j] <- rbinom(1, population[j], prob[j])
-  negative[j] <- population[j] - positive[j]
-}
-df <- cbind(ID, covariate_mat, positive, negative) %>% as.data.frame()
-colnames(df) <- c('ID', 'X1', 'X2', 'Positive', 'Negative')
-head(df)
+# ID <- seq(1, 100)
+# positive <- rep(0, length(ID))
+# negative <- rep(0, length(ID))
+# for (j in 1:length(ID)){
+#   positive[j] <- rbinom(1, population[j], prob[j])
+#   negative[j] <- population[j] - positive[j]
+# }
+# df <- cbind(ID, covariate_mat, positive, negative) %>% as.data.frame()
+# colnames(df) <- c('ID', 'X1', 'X2', 'Positive', 'Negative')
+# head(df)
 
 # transform data from short to long
 short2long <- function(shortdf, count_cols){
@@ -43,76 +43,130 @@ short2long <- function(shortdf, count_cols){
   colnames(longdf) <- cnames
 
   counts_df <- shortdf[, count_cols]
+  freq <- rep(0, nrow(counts_df))
   for (j in 1:nrow(counts_df)){
     pos_count <- counts_df[j, count_cols[1]]
     neg_count <- counts_df[j, count_cols[2]]
     if (pos_count + neg_count == 0) next
-    binary_outcome <- c(rep(1, pos_count), rep(0, neg_count))
+    freq[j] <- pos_count + neg_count
+    Y <- c(rep(1, pos_count), rep(0, neg_count))
     repeat_covars <- covar_df[rep(j, pos_count+neg_count), ]
-    longdf <- rbind(longdf, cbind(repeat_covars, binary_outcome))
+    longdf <- rbind(longdf, cbind(repeat_covars, Y))
   }
-
-  return(longdf)
+  freq <- freq[freq!=0]
+  return(list(longdf, freq))
 }
 
-long_df <- short2long(df, c('Positive', 'Negative'))
-df$ID <- as.factor(df$ID)
-colnames(long_df) <- c('ID', 'X1', 'X2', 'Y')
+# long_df <- short2long(df, c('Positive', 'Negative'))
+# df$ID <- as.factor(df$ID)
+# colnames(long_df) <- c('ID', 'X1', 'X2', 'Y')
 
 
 # glmer output
-glmer_start <- proc.time()
-lme4model <- glmer(cbind(Positive, Negative) ~ X1 + X2 + (1|ID), data=df, family="binomial",
-                   nAGQ = 0)
-glmer_stop <- proc.time()
+# glmermodel <- glmer(cbind(Positive, Negative) ~ X1 + X2 + (1|ID), data=df, family="binomial",
+#                    nAGQ = 0)
 
 ### try with IRWLS
 
-IRWLS_start <- proc.time()
-glm_model <- glm(Y ~ X1 + X2, data=long_df, family="binomial")
+IRWLS <- function(taxa_pairs, covariates, level,  data){
+  # generate long format
+  clean_data <- short2long(data, taxa_pairs)
+  long_df <- clean_data[[1]]
+  freq <- clean_data[[2]]
+  long_df[[level]] <- as.factor(long_df[[level]])
 
-beta <- glm_model$coefficients
-b <- rep(0, length(unique(df$ID)))
-t <- 0
+  # generate regression formula
+  covariates_sum <- paste(covariates, collapse='+')
+  reffect <- sprintf('(1|%s)', level)
+  regfml_glm <- formula(sprintf("%s %s", 'Y ~', covariates_sum))
+  regfml_lmm <- formula(sprintf("%s %s + %s", 'U ~', covariates_sum, reffect))
 
-repeat{
-  {
-    eta <- beta[1] + rep(b, times=population) +
-      as.vector(as.matrix(long_df[, c('X1', 'X2')]) %*% beta[c(2,3)])
-    pi <- 1/(1+exp(-eta))
-    weights <- pi*(1-pi)
-    long_df$weight <- weights
-    u_vec <- eta + (long_df$Y - pi) / weights
-    long_df$U <- u_vec
-    lmix_model <- lmer(U ~ X1+X2 + (1|ID), data=long_df, weights = weight, REML=FALSE)
-    new_beta <- fixef(lmix_model) %>% unname()
-    b <- ranef(lmix_model)[[1]][[1]]
-    t <- t+1
-  };
-  if(norm(new_beta - beta, type='2') < 0.000001){
-    beta <- new_beta
-    final_model <- lmix_model
-    break;
-  } else{
-    beta <- new_beta
+  # glm
+  glm_model <- glm(regfml_glm, data=long_df, family="binomial")
+
+  beta <- glm_model$coefficients
+  b <- rep(0, length(unique(long_df[[level]])))
+  t <- 0
+
+  # Iteratively weighted LMM
+  repeat{
+    {
+      eta <- beta[1] + rep(b, freq) +
+        as.vector(as.matrix(long_df[, covariates]) %*% beta[-1])
+      pi <- 1/(1+exp(-eta))
+      weights <- pi*(1-pi)
+      long_df$weight <- weights
+      u_vec <- eta + (long_df$Y - pi) / weights
+      long_df$U <- u_vec
+      lmix_model <- lmer(regfml_lmm, data=long_df, weights = weight, REML=FALSE)
+      new_beta <- fixef(lmix_model) %>% unname()
+      b <- ranef(lmix_model)[[1]][[1]]
+      t <- t+1
+    };
+    if(norm(new_beta - beta, type='2') < 0.000001){
+      beta <- new_beta
+      final_model <- lmix_model
+      break;
+    } else{
+      beta <- new_beta
+    }
   }
+  return(final_model)
 }
-IRWLS_stop <- proc.time()
+
+# final_model <- IRWLS(c('Positive', 'Negative'), c('X1', 'X2'), 'ID', df)
+
 
 get_pval <- function(tvar){
   0.5 - abs(0.5 - pnorm(tvar))
 }
 
-beta_glmer <- fixef(lme4model) %>% unname()
-var_glmer <- vcov(lme4model) %>% diag()
-t_glmer <- beta_glmer / sqrt(var_glmer)
-pval_glmer <- get_pval(t_glmer)
+# beta_glmer <- fixef(glmermodel) %>% unname()
+# var_glmer <- vcov(glmermodel) %>% diag()
+# t_glmer <- beta_glmer / sqrt(var_glmer)
+# pval_glmer <- get_pval(t_glmer)
+#
+# beta_IRWLS <- fixef(final_model)
+# var_IRWLS <- vcov(final_model) %>% diag()
+# t_IRWLS <- beta_IRWLS / sqrt(var_IRWLS)
+# pval_IRWLS <- get_pval(t_IRWLS)
 
-beta_IRWLS <- fixef(final_model)
-var_IRWLS <- vcov(final_model) %>% diag()
-t_IRWLS <- beta_IRWLS / sqrt(var_IRWLS)
-pval_IRWLS <- get_pval(t_IRWLS)
 
+
+## try on real data, especially when glmer fails, first find two pairs
+pvals_glmer = read.csv('RMD/CAARS_Model_Summary/Pvals.csv')
+pvals_mat <- pvals_glmer[,c('GLMM_PIRLS', 'GLMM_LA_NM', 'GLMM_LA_BOBYQA', 'GLMM_GQ_NM',
+                            'GLMM_GQ_BOBYQA')] %>% as.matrix()
+pval_var <- apply(pvals_mat, 1, var)
+tpair_pval_rank <- length(pval_var) + 1 - rank(pval_var)
+rowids <- which(tpair_pval_rank %in% seq(1, 10))
+selected_pairs <- pvals_glmer[c(1596,1554), c(1,2)] # two pairs of taxa to demonstrate
+
+
+first_pair <- c(selected_pairs$Taxa1[1], selected_pairs$Taxa2[1])
+second_pair <- c(selected_pairs$Taxa1[2], selected_pairs$Taxa2[2])
+
+### download data
+
+folder = 'RMD/CAARS_data'
+load(file.path(file.path(folder, 'CAARS_processed_GENUS.Rdata')))
+processed_data <- preprocess(CAARS.data.genus, 'SAMPLE_ID', "asthma")
+
+
+filtered_count <- processed_data$feature_table
+filtered_metadata <- processed_data$meta_data
+struc_zero <- processed_data$structure_zeros
+
+covariates <- filtered_metadata[, c('SAMPLE_ID', 'asthma')]
+df1 <- cbind(covariates, t(filtered_count[first_pair, ]))
+glmermodel1 <- glmer(cbind(g__Saccharimonadales, g__Moraxella) ~ asthma + (1|SAMPLE_ID),
+                     data=df1, family="binomial")
+IRWLSmodel1 <- IRWLS(c('g__Saccharimonadales', 'g__Moraxella'), c('asthma'), 'SAMPLE_ID', df1)
+
+df2 <- cbind(covariates, t(filtered_count[second_pair, ]))
+glmermodel2 <- glmer(cbind(g__Streptobacillus, g__Kingella) ~ asthma + (1|SAMPLE_ID),
+                     data=df2, family="binomial")
+IRWLSmodel2 <- IRWLS(c('g__Streptobacillus', 'g__Kingella'), c('asthma'), 'SAMPLE_ID', df2)
 
 ## figure out how to iterate the 10 lines above
 
