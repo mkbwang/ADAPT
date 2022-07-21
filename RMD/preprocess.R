@@ -8,9 +8,6 @@ library(cowplot)
 library(ggplot2)
 library(igraph)
 
-rm(list=ls())
-
-source('RMD/ANCOM.R')
 
 preprocess <- function(phylseqdata, ID_col, group_col,
                        outlier_cutoff=0.05, zero_prop_cutoff=0.9, min_lib=5000){

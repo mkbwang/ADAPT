@@ -140,7 +140,7 @@ pvals_mat <- pvals_glmer[,c('GLMM_PIRLS', 'GLMM_LA_NM', 'GLMM_LA_BOBYQA', 'GLMM_
 pval_var <- apply(pvals_mat, 1, var)
 tpair_pval_rank <- length(pval_var) + 1 - rank(pval_var)
 rowids <- which(tpair_pval_rank %in% seq(1, 10))
-selected_pairs <- pvals_glmer[c(1596,1554), c(1,2)] # two pairs of taxa to demonstrate
+selected_pairs <- pvals_glmer[rowids, ] # two pairs of taxa to demonstrate
 
 
 first_pair <- c(selected_pairs$Taxa1[1], selected_pairs$Taxa2[1])

@@ -1,0 +1,305 @@
+---
+title: "GLMM IRWLS Demonstration"
+author: "Mukai Wang"
+date: "7/21/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+folder = '/home/wangmk/UM/Research/MDAWG/Differential_Ratio/DiffRatio/RMD'
+source(file.path(folder, 'ANCOM.R'))
+source(file.path(folder, 'preprocess.R'))
+library(ggplot2)
+library(lme4)
+```
+
+# Simulated Data
+
+I first simulate a small dataset to test if I understand the IRWLS algorithm correctly. I prepare 100 data points. Each data point has two binary covariates. Their effect sizes are 1.2 and -1.3 accordingly. The random intercepts are generated from a mixture of $N(-2, 0.4)$ and $N(2, 0.4)$.
+
+```{r}
+set.seed(2022)
+sythetic_effsizes <- c(1.2, -1.3)
+covariate_mat <- cbind(rbinom(100, 1, 0.5), rbinom(100, 1, 0.5))
+
+### random effects generated from two Gaussian mixtures
+mixcomp1 <- rnorm(100, mean=-2, sd=0.4)
+mixcomp2 <- rnorm(100, mean=2, sd=0.4)
+selector <- rbinom(100, 1, prob=0.5)
+randeff <- rep(0, 100)
+randeff[selector == 0] <- mixcomp1[selector == 0]
+randeff[selector == 1] <- mixcomp2[selector == 1]
+
+logodds <- 0.05 + covariate_mat %*% sythetic_effsizes + randeff
+prob <- 1 / (1 + exp(-logodds))
+population <- floor(runif(100, min=10, max=25))
+ID <- seq(1, 100)
+positive <- rep(0, length(ID))
+negative <- rep(0, length(ID))
+for (j in 1:length(ID)){
+  positive[j] <- rbinom(1, population[j], prob[j])
+  negative[j] <- population[j] - positive[j]
+}
+df <- cbind(ID, covariate_mat, positive, negative) %>% as.data.frame()
+colnames(df) <- c('ID', 'X1', 'X2', 'Positive', 'Negative')
+
+knitr::kable(head(df))
+```
+
+```{r, echo=FALSE, out.width="60%"}
+ggplot(df, aes(x=Positive, y=Negative)) + geom_point() +
+  theme_bw()
+```
+
+
+First run the `glmer` function.
+
+```{r}
+glmermodel <- glmer(cbind(Positive, Negative) ~ X1 + X2 + (1|ID), 
+                    data=df, family="binomial")
+```
+
+
+Then let's code up IRWLS. Note that because we are iteratively running linear mixed model, we need to transform the data into long format first.
+
+```{r}
+short2long <- function(shortdf, count_cols){
+
+  covar_df <- shortdf[, !names(shortdf) %in% count_cols]
+
+  cnames <- c(colnames(covar_df), 'Y')
+  longdf <- data.frame(matrix(ncol = length(cnames), nrow=0))
+  colnames(longdf) <- cnames
+
+  counts_df <- shortdf[, count_cols]
+  freq <- rep(0, nrow(counts_df))
+  for (j in 1:nrow(counts_df)){
+    pos_count <- counts_df[j, count_cols[1]]
+    neg_count <- counts_df[j, count_cols[2]]
+    if (pos_count + neg_count == 0) next
+    freq[j] <- pos_count + neg_count
+    Y <- c(rep(1, pos_count), rep(0, neg_count))
+    repeat_covars <- covar_df[rep(j, pos_count+neg_count), ]
+    longdf <- rbind(longdf, cbind(repeat_covars, Y))
+  }
+  freq <- freq[freq!=0]
+  return(list(longdf, freq))
+}
+```
+
+Then comes the details of the IRWLS algorithm. We first run GLM to get initial fixed effects to start from. Then we apply iteratively linear mixed effects model to update the fixed effects and the random effects.
+
+```{r}
+IRWLS <- function(taxa_pairs, covariates, level,  data){
+  # generate long format
+  clean_data <- short2long(data, taxa_pairs)
+  long_df <- clean_data[[1]]
+  freq <- clean_data[[2]]
+  long_df[[level]] <- as.factor(long_df[[level]])
+
+  # generate regression formula
+  covariates_sum <- paste(covariates, collapse='+')
+  reffect <- sprintf('(1|%s)', level)
+  regfml_glm <- formula(sprintf("%s %s", 'Y ~', covariates_sum))
+  regfml_lmm <- formula(sprintf("%s %s + %s", 'U ~', covariates_sum, reffect))
+
+  # glm
+  glm_model <- glm(regfml_glm, data=long_df, family="binomial")
+
+  beta <- glm_model$coefficients
+  b <- rep(0, length(unique(long_df[[level]])))
+  t <- 0
+
+  # Iteratively weighted LMM
+  repeat{
+    {
+      eta <- beta[1] + rep(b, freq) +
+        as.vector(as.matrix(long_df[, covariates]) %*% beta[-1])
+      pi <- 1/(1+exp(-eta))
+      weights <- pi*(1-pi)
+      long_df$weight <- weights
+      u_vec <- eta + (long_df$Y - pi) / weights
+      long_df$U <- u_vec
+      lmix_model <- lmer(regfml_lmm, data=long_df, 
+                         weights = weight, REML=FALSE)
+      new_beta <- fixef(lmix_model) %>% unname()
+      b <- ranef(lmix_model)[[1]][[1]]
+      t <- t+1
+    };
+    if(norm(new_beta - beta, type='2') < 0.000001){
+      beta <- new_beta
+      final_model <- lmix_model
+      break;
+    } else{
+      beta <- new_beta
+    }
+  }
+  return(final_model)
+}
+
+
+IRWLS_model <- IRWLS(c('Positive', 'Negative'), c('X1', 'X2'), 'ID', df)
+```
+
+Compare the estimated fixed effects between the `glmer` and the IRWLS.
+
+```{r, echo=FALSE}
+get_pval <- function(tvar){
+  0.5 - abs(0.5 - pnorm(tvar))
+}
+
+model_comparison <- function(model1, model2){
+  beta_1 <- fixef(model1) %>% unname()
+  sd_1 <- vcov(model1) %>% diag() %>% sqrt()
+  t_1 <- beta_1 / sd_1
+  pval_1 <- get_pval(t_1)
+
+  beta_2 <- fixef(model2)
+  sd_2 <- vcov(model2) %>% diag() %>% sqrt()
+  t_2 <- beta_2 / sd_2
+  pval_2 <- get_pval(t_2)
+
+  result_comparison <- cbind(beta_1, sd_1, pval_1, 
+                                      beta_2, sd_2, pval_2) %>%
+    as.data.frame()
+  
+  return(result_comparison)
+}
+
+simulation_result_comparison <- model_comparison(glmermodel, IRWLS_model)
+
+rownames(simulation_result_comparison) <- c("Intercept", "X1", 'X2')
+colnames(simulation_result_comparison) <- c('glmer_beta', 'glmer_SD', 'glmer_pval',
+                                            'IRWLS_beta', 'IRWLS_SD', 'IRWLS_pval')
+
+knitr::kable(simulation_result_comparison, digits=4)
+```
+
+As it turns out, the results are quite comparable. It means that my IRWLS implementation is correct.
+
+
+# Real Data
+
+Next let's take a look at the reaction of our IRWLS algorithm towards some real taxa pairs that the `glmer` function struggled.
+
+## Saccharimonadales and Moraxella
+
+```{r, echo=FALSE}
+# load the data
+load(file.path(file.path(folder, 'CAARS_data', 'CAARS_processed_GENUS.Rdata')))
+processed_data <- preprocess(CAARS.data.genus, 'SAMPLE_ID', "asthma")
+
+
+filtered_count <- processed_data$feature_table
+filtered_metadata <- processed_data$meta_data
+covariates <- filtered_metadata[, c('SAMPLE_ID', 'asthma')]
+```
+
+The visualization of the counts is
+
+```{r, echo=FALSE, out.width="60%"}
+taxa_pair1 <- c("g__Saccharimonadales", "g__Moraxella" )
+df1 <- cbind(covariates, t(filtered_count[taxa_pair1, ]))
+df1_copy <- df1
+df1_copy$asthma <- as.factor(df1_copy$asthma)
+ggplot(df1_copy, aes(x=g__Moraxella, y=g__Saccharimonadales, color=asthma)) + geom_jitter(alpha=0.6) +
+  theme_bw()
+```
+
+
+We can first try to apply a fisher test on the number of individuals grouped by whether the taxa count is larger than zero. 
+```{r, echo=FALSE}
+contingency_table_test <- function(countdf, taxa_pair, group){
+  group1_count <- countdf[countdf[[group]] == 0, ]
+  group2_count <- countdf[countdf[[group]] == 1, ]
+  
+  taxon1 <- taxa_pair[1]
+  taxon2 <- taxa_pair[2]
+  group1_dbpos <- sum((group1_count[[taxon1]] > 0) & (group1_count[[taxon2]] > 0), na.rm=TRUE)
+  group1_dbneg <- sum((group1_count[[taxon1]] == 0) & (group1_count[[taxon2]] == 0), na.rm=TRUE)
+  group1_t1post2neg <- sum((group1_count[[taxon1]] > 0) & (group1_count[[taxon2]] == 0), na.rm=TRUE)
+  group1_t1negt2pos <- sum((group1_count[[taxon1]] == 0) & (group1_count[[taxon2]] > 0), na.rm=TRUE)
+  
+  group2_dbpos <- sum((group2_count[[taxon1]] > 0) & (group2_count[[taxon2]] > 0), na.rm=TRUE)
+  group2_dbneg <- sum((group2_count[[taxon1]] == 0) & (group2_count[[taxon2]] == 0), na.rm=TRUE)
+  group2_t1post2neg <- sum((group2_count[[taxon1]] > 0) & (group2_count[[taxon2]] == 0), na.rm=TRUE)
+  group2_t1negt2pos <- sum((group2_count[[taxon1]] == 0) & (group2_count[[taxon2]] > 0), na.rm=TRUE)
+  
+  ctable <- matrix(c(group1_dbpos, group1_dbneg, group1_t1post2neg, group1_t1negt2pos,
+                                group2_dbpos, group2_dbneg, group2_t1post2neg, group2_t1negt2pos),
+                              nrow=4)
+  
+  testresult <- fisher.test(ctable)
+  
+  return(list(ctable, testresult))
+}
+
+outcome1 <- contingency_table_test(df1, c("g__Saccharimonadales", "g__Moraxella"), 'asthma')
+ctable1 <- outcome1[[1]] %>% as.data.frame()
+colnames(ctable1) <- c("Control", "Asthma")
+rownames(ctable1) <- c("Double Positive", "Double Negative", "T1PT2N", "T1NT2P")
+fishertest1 <- outcome1[[2]]
+knitr::kable(ctable1)
+```
+The P value is `r round(fishertest1$p.value, digits=4)`.
+
+The effect sizes estimated by `glmer` is unreasonable. For the IRWLS, there is a singular warning that I need to look into later. Nevertheless, we don't see the same issue of extremely large/small effect sizes.
+```{r}
+glmermodel1 <- glmer(cbind(g__Saccharimonadales, g__Moraxella) ~ asthma + (1|SAMPLE_ID),
+                     data=df1, family="binomial")
+
+df1$SAMPLE_ID <- as.factor(df1$SAMPLE_ID)
+df1$asthma <- as.numeric(df1$asthma)
+IRWLSmodel1 <- IRWLS(c('g__Saccharimonadales', 'g__Moraxella'), c('asthma'), 'SAMPLE_ID', df1)
+
+taxa1_comparison <- model_comparison(glmermodel1, IRWLSmodel1)
+rownames(taxa1_comparison) <- c("Intercept", "Asthma")
+colnames(taxa1_comparison) <- c('glmer_beta', 'glmer_SD', 'glmer_pval',
+                                            'IRWLS_beta', 'IRWLS_SD', 'IRWLS_pval')
+
+knitr::kable(taxa1_comparison, digits=4)
+```
+
+
+
+## Bifidobacterium and Butyrivibrio
+
+The visualization of the counts is
+```{r, echo=FALSE, out.width="60%"}
+taxa_pair2 <- c('g__Streptobacillus', 'g__Kingella')
+df2 <- cbind(covariates, t(filtered_count[taxa_pair2, ]))
+df2_copy <- df2
+df2_copy$asthma <- as.factor(df2_copy$asthma)
+ggplot(df2_copy, aes(x=g__Kingella, y=g__Streptobacillus, color=asthma)) +
+  geom_jitter(alpha=0.6) +
+  theme_bw()
+```
+
+
+```{r, echo=FALSE}
+outcome2 <- contingency_table_test(df2, taxa_pair2, 'asthma')
+ctable2 <- outcome2[[1]] %>% as.data.frame()
+colnames(ctable2) <- c("Control", "Asthma")
+rownames(ctable2) <- c("Double Positive", "Double Negative", "T1PT2N", "T1NT2P")
+fishertest2 <- outcome2[[2]]
+knitr::kable(ctable2)
+```
+The fisher exact test result gives us p value of `r round(fishertest2$p.value, digits=4)`.
+
+The `glmer` function sends out a warning and present an obviously miscalculated p value. The IRWLS algorithm doesn't.
+
+```{r}
+glmermodel2 <- glmer(cbind(g__Streptobacillus, g__Kingella) ~ asthma + (1|SAMPLE_ID),
+                     data=df2, family="binomial")
+
+IRWLSmodel2 <- IRWLS(c('g__Streptobacillus', 'g__Kingella'), c('asthma'), 'SAMPLE_ID', df2)
+taxa2_comparison <- model_comparison(glmermodel2, IRWLSmodel2)
+
+rownames(taxa2_comparison) <- c("Intercept", "Asthma")
+colnames(taxa2_comparison) <- c('glmer_beta', 'glmer_SD', 'glmer_pval',
+                                            'IRWLS_beta', 'IRWLS_SD', 'IRWLS_pval')
+
+knitr::kable(taxa2_comparison, digits=4)
+```
+
