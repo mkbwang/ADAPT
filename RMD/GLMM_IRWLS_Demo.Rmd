@@ -7,7 +7,7 @@ output: pdf_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-folder = '/home/wangmk/UM/Research/MDAWG/Differential_Ratio/DiffRatio/RMD'
+folder = '/home/wangmk/UM/Research/MDAWG/DiffRatio/RMD'
 source(file.path(folder, 'ANCOM.R'))
 source(file.path(folder, 'preprocess.R'))
 library(ggplot2)
@@ -53,11 +53,13 @@ ggplot(df, aes(x=Positive, y=Negative)) + geom_point() +
 ```
 
 
-First run the `glmer` function.
+First run the `glmer` function. Remember that `lme4` supports multiple settings. I run both the PIRLS(`nAGQ`=0) and Laplace approximation(`nAGQ`=1). 
 
 ```{r}
-glmermodel <- glmer(cbind(Positive, Negative) ~ X1 + X2 + (1|ID), 
-                    data=df, family="binomial")
+glmermodel_LA <- glmer(cbind(Positive, Negative) ~ X1 + X2 + (1|ID), 
+                    data=df, family="binomial", nAGQ=1)
+glmermodel_PIRLS <- glmer(cbind(Positive, Negative) ~ X1 + X2 + (1|ID), 
+                    data=df, family="binomial", nAGQ=0)
 ```
 
 
@@ -127,7 +129,7 @@ IRWLS <- function(taxa_pairs, covariates, level,  data){
       b <- ranef(lmix_model)[[1]][[1]]
       t <- t+1
     };
-    if(norm(new_beta - beta, type='2') < 0.000001){
+    if(norm(new_beta - beta, type='2') < 0.000001 || t > 1000){
       beta <- new_beta
       final_model <- lmix_model
       break;
@@ -149,34 +151,34 @@ get_pval <- function(tvar){
   0.5 - abs(0.5 - pnorm(tvar))
 }
 
-model_comparison <- function(model1, model2){
+fixed_effects_summary <- function(model1){
   beta_1 <- fixef(model1) %>% unname()
   sd_1 <- vcov(model1) %>% diag() %>% sqrt()
   t_1 <- beta_1 / sd_1
   pval_1 <- get_pval(t_1)
 
-  beta_2 <- fixef(model2)
-  sd_2 <- vcov(model2) %>% diag() %>% sqrt()
-  t_2 <- beta_2 / sd_2
-  pval_2 <- get_pval(t_2)
-
-  result_comparison <- cbind(beta_1, sd_1, pval_1, 
-                                      beta_2, sd_2, pval_2) %>%
+  result <- cbind(beta_1, sd_1, pval_1) %>%
     as.data.frame()
   
-  return(result_comparison)
+  return(result)
 }
 
-simulation_result_comparison <- model_comparison(glmermodel, IRWLS_model)
+simulation_result_glmer_LA <- fixed_effects_summary(glmermodel_LA)
+simulation_result_glmer_PIRLS <- fixed_effects_summary(glmermodel_PIRLS)
+simulation_result_IRWLS <- fixed_effects_summary(IRWLS_model)
+simulation_result_comparison <- cbind(simulation_result_glmer_LA,
+                                      simulation_result_glmer_PIRLS,
+                                      simulation_result_IRWLS)
 
 rownames(simulation_result_comparison) <- c("Intercept", "X1", 'X2')
-colnames(simulation_result_comparison) <- c('glmer_beta', 'glmer_SD', 'glmer_pval',
+colnames(simulation_result_comparison) <- c('glmer_LA_beta', 'glmer_LA_SD', 'glmer_LA_pval',
+                                            'glmer_PIRLS_beta', 'glmer_PIRLS_SD', 'glmer_PIRLS_pval',
                                             'IRWLS_beta', 'IRWLS_SD', 'IRWLS_pval')
 
-knitr::kable(simulation_result_comparison, digits=4)
+knitr::kable(t(simulation_result_comparison), digits=4)
 ```
 
-As it turns out, the results are quite comparable. It means that my IRWLS implementation is correct.
+As it turns out, the results are quite comparable. It means that my IRWLS implementation is correct. It's worthwhile to point out that my implementation of IRWLS has very similar outcome as the PIRLS outcome from `glmer` function.
 
 
 # Real Data
@@ -193,6 +195,7 @@ processed_data <- preprocess(CAARS.data.genus, 'SAMPLE_ID', "asthma")
 
 filtered_count <- processed_data$feature_table
 filtered_metadata <- processed_data$meta_data
+struc_zero <- processed_data$structure_zeros
 covariates <- filtered_metadata[, c('SAMPLE_ID', 'asthma')]
 ```
 
@@ -208,8 +211,7 @@ ggplot(df1_copy, aes(x=g__Moraxella, y=g__Saccharimonadales, color=asthma)) + ge
 ```
 
 
-We can first try to apply a fisher test on the number of individuals grouped by whether the taxa count is larger than zero. 
-```{r, echo=FALSE}
+```{r, echo=FALSE, eval=FALSE}
 contingency_table_test <- function(countdf, taxa_pair, group){
   group1_count <- countdf[countdf[[group]] == 0, ]
   group2_count <- countdf[countdf[[group]] == 1, ]
@@ -235,30 +237,37 @@ contingency_table_test <- function(countdf, taxa_pair, group){
   return(list(ctable, testresult))
 }
 
-outcome1 <- contingency_table_test(df1, c("g__Saccharimonadales", "g__Moraxella"), 'asthma')
-ctable1 <- outcome1[[1]] %>% as.data.frame()
-colnames(ctable1) <- c("Control", "Asthma")
-rownames(ctable1) <- c("Double Positive", "Double Negative", "T1PT2N", "T1NT2P")
-fishertest1 <- outcome1[[2]]
-knitr::kable(ctable1)
+# outcome1 <- contingency_table_test(df1, c("g__Saccharimonadales", "g__Moraxella"), 'asthma')
+# ctable1 <- outcome1[[1]] %>% as.data.frame()
+# colnames(ctable1) <- c("Control", "Asthma")
+# rownames(ctable1) <- c("Double Positive", "Double Negative", "T1PT2N", "T1NT2P")
+# fishertest1 <- outcome1[[2]]
+# knitr::kable(ctable1)
 ```
-The P value is `r round(fishertest1$p.value, digits=4)`.
 
-The effect sizes estimated by `glmer` is unreasonable. For the IRWLS, there is a singular warning that I need to look into later. Nevertheless, we don't see the same issue of extremely large/small effect sizes.
+
+The effect sizes estimated by `glmer` is unreasonable. For the IRWLS, there is a singular warning that I need to look into later. Nevertheless, we don't see the same issue of extremely large/small effect sizes. The effect sizes are different between my implementation of IRWLS and the output from the PIRLS option of `glmer`, but the significance conclusion is the same.
 ```{r}
-glmermodel1 <- glmer(cbind(g__Saccharimonadales, g__Moraxella) ~ asthma + (1|SAMPLE_ID),
-                     data=df1, family="binomial")
+glmermodel1_LA <- glmer(cbind(g__Saccharimonadales, g__Moraxella) ~ asthma + (1|SAMPLE_ID),
+                     data=df1, family="binomial", nAGQ=1)
+glmermodel1_PIRLS <- glmer(cbind(g__Saccharimonadales, g__Moraxella) ~ asthma + (1|SAMPLE_ID),
+                     data=df1, family="binomial", nAGQ=0)
 
-df1$SAMPLE_ID <- as.factor(df1$SAMPLE_ID)
-df1$asthma <- as.numeric(df1$asthma)
+# df1$SAMPLE_ID <- as.factor(df1$SAMPLE_ID)
+# df1$asthma <- as.numeric(df1$asthma)
 IRWLSmodel1 <- IRWLS(c('g__Saccharimonadales', 'g__Moraxella'), c('asthma'), 'SAMPLE_ID', df1)
 
-taxa1_comparison <- model_comparison(glmermodel1, IRWLSmodel1)
+taxa1_glmer_LA <- fixed_effects_summary(glmermodel1_LA)
+taxa1_glmer_PIRLS <- fixed_effects_summary(glmermodel1_PIRLS)
+taxa1_IRWLS <- fixed_effects_summary(IRWLSmodel1)
+
+taxa1_comparison <- cbind(taxa1_glmer_LA, taxa1_glmer_PIRLS, taxa1_IRWLS)
 rownames(taxa1_comparison) <- c("Intercept", "Asthma")
 colnames(taxa1_comparison) <- c('glmer_beta', 'glmer_SD', 'glmer_pval',
+                                'glmer_PIRLS_beta', 'glmer_PIRLS_SD', 'glmer_PIRLS_pval',
                                             'IRWLS_beta', 'IRWLS_SD', 'IRWLS_pval')
 
-knitr::kable(taxa1_comparison, digits=4)
+knitr::kable(t(taxa1_comparison), digits=4)
 ```
 
 
@@ -277,7 +286,7 @@ ggplot(df2_copy, aes(x=g__Kingella, y=g__Streptobacillus, color=asthma)) +
 ```
 
 
-```{r, echo=FALSE}
+```{r, echo=FALSE, eval=FALSE}
 outcome2 <- contingency_table_test(df2, taxa_pair2, 'asthma')
 ctable2 <- outcome2[[1]] %>% as.data.frame()
 colnames(ctable2) <- c("Control", "Asthma")
@@ -285,21 +294,177 @@ rownames(ctable2) <- c("Double Positive", "Double Negative", "T1PT2N", "T1NT2P")
 fishertest2 <- outcome2[[2]]
 knitr::kable(ctable2)
 ```
-The fisher exact test result gives us p value of `r round(fishertest2$p.value, digits=4)`.
 
-The `glmer` function sends out a warning and present an obviously miscalculated p value. The IRWLS algorithm doesn't.
+
+The `glmer` function sends out a warning and present an obviously miscalculated p value when under Laplace approximation setting. There is no warning under PIRLS setting or with my own version of IRWLS. The coefficient estimates are very similar between my implementation of IRWLS and the PIRLS setting of `glmer`.
+
 
 ```{r}
-glmermodel2 <- glmer(cbind(g__Streptobacillus, g__Kingella) ~ asthma + (1|SAMPLE_ID),
-                     data=df2, family="binomial")
+glmermodel2_LA <- glmer(cbind(g__Streptobacillus, g__Kingella) ~ asthma + (1|SAMPLE_ID),
+                     data=df2, family="binomial", nAGQ=1)
+glmermodel2_PIRLS <- glmer(cbind(g__Streptobacillus, g__Kingella) ~ asthma + (1|SAMPLE_ID),
+                     data=df2, family="binomial", nAGQ=0)
 
 IRWLSmodel2 <- IRWLS(c('g__Streptobacillus', 'g__Kingella'), c('asthma'), 'SAMPLE_ID', df2)
-taxa2_comparison <- model_comparison(glmermodel2, IRWLSmodel2)
+
+taxa2_glmer_LA <- fixed_effects_summary(glmermodel2_LA)
+taxa2_glmer_PIRLS <- fixed_effects_summary(glmermodel2_PIRLS)
+taxa2_IRWLS <- fixed_effects_summary(IRWLSmodel2)
+
+taxa2_comparison <- cbind(taxa2_glmer_LA, taxa2_glmer_PIRLS, taxa2_IRWLS)
 
 rownames(taxa2_comparison) <- c("Intercept", "Asthma")
 colnames(taxa2_comparison) <- c('glmer_beta', 'glmer_SD', 'glmer_pval',
+                                'glmer_PIRLS_beta', 'glmer_PIRLS_SD', 'glmer_PIRLS_pval',
                                             'IRWLS_beta', 'IRWLS_SD', 'IRWLS_pval')
 
-knitr::kable(taxa2_comparison, digits=4)
+knitr::kable(t(taxa2_comparison), digits=4)
 ```
+
+
+# Comparison between ANCOM and GLMM with PIRLS
+
+First run ANCOM.
+
+```{r, message=FALSE}
+main_var = "asthma"; p_adj_method = "BH"; alpha = 0.05
+adj_formula = NULL; rand_formula =  NULL
+
+ANCOM_start <- proc.time()
+res = ANCOM(filtered_count, filtered_metadata, struc_zero, main_var, p_adj_method,
+            alpha, adj_formula, rand_formula) # , lme_control)
+ANCOM_duration <- proc.time() - ANCOM_start
+ANCOM_pvals <- res$p_data
+
+# organize all the p values into a long df
+
+included_genus <- names(which(rowSums(struc_zero) == 0))
+taxa_pairs <- combn(included_genus, 2) %>% t() %>% as.data.frame()
+colnames(taxa_pairs) <- c("Taxa1", "Taxa2")
+taxa_pairs$ANCOM <- 0
+
+for (j in 1:nrow(taxa_pairs)){
+  t1 <- taxa_pairs$Taxa1[j]
+  t2 <- taxa_pairs$Taxa2[j]
+  taxa_pairs$ANCOM[j] <- ANCOM_pvals[t1, t2]
+}
+taxa_pairs$ANCOM_adjusted <- p.adjust(taxa_pairs$ANCOM, method="BH")
+
+```
+
+Then run  `glmer` with PIRLS setting.
+
+```{r}
+library(DiffRatio)
+result_file <- file.path(folder, 'CAARS_Model_Summary', 
+                         'ANCOM_PIRLS_pval_comp.csv')
+if(file.exists(result_file)){
+  taxa_pairs <- read.csv(result_file)
+} else{
+  taxa_pairs$PIRLS <- 0
+  PIRLS_start <- proc.time()
+  
+  PIRLS_failed_pairs <- c()
+  for (j in 1:nrow(taxa_pairs)){
+    tryCatch({
+      t1 <- taxa_pairs$Taxa1[j]
+      t2 <- taxa_pairs$Taxa2[j]
+      glmm_PIRLS <- dfr(count_table=filtered_count, sample_info=filtered_metadata,
+                         covar=c("asthma"), tpair=c(t1, t2), 
+                      reff="SAMPLE_ID", taxa_are_rows = TRUE,
+                         nAGQ = 0L, optimizer = "Nelder_Mead")
+    }, warning = function(m){
+      PIRLS_failed_pairs <<- c(PIRLS_failed_pairs, j)
+    }, finally = {
+      PIRLS_result <- fixed_effects_summary(glmm_PIRLS)
+      taxa_pairs$PIRLS[j] <- PIRLS_result[2, 3]
+    }
+    )
+  }
+  
+  PIRLS_duration <- proc.time() - PIRLS_start
+  taxa_pairs$PIRLS_adjusted <- p.adjust(taxa_pairs$PIRLS, method='BH')
+  write.csv(taxa_pairs, 
+            file.path(folder, 'CAARS_Model_Summary', 'ANCOM_PIRLS_pval_comp.csv'),
+            row.names = FALSE)
+}
+```
+
+
+```{r, echo=FALSE}
+ANCOM_positive_count_raw <- sum(taxa_pairs$ANCOM < 0.05)
+PIRLS_positive_count_raw <- sum(taxa_pairs$PIRLS < 0.05)
+ANCOM_positive_PIRLS_negative_count_raw <- sum(taxa_pairs$ANCOM < 0.05 &
+                                                 taxa_pairs$PIRLS>0.05)
+ANCOM_negative_PIRLS_positive_count_raw <- sum(taxa_pairs$ANCOM > 0.05 &
+                                                 taxa_pairs$PIRLS < 0.05)
+
+ANCOM_positive_count_adjusted <- sum(taxa_pairs$ANCOM_adjusted < 0.05)
+PIRLS_positive_count_adjusted <- sum(taxa_pairs$PIRLS_adjusted < 0.05)
+
+```
+
+
+If we check the raw P values, ANCOM discovers `r ANCOM_positive_count_raw` pairs of taxa that are differentially abundant. GLMM with PIRLS setting discovers `r PIRLS_positive_count_raw` pairs of taxa that are differentially abundant. `r ANCOM_positive_PIRLS_negative_count_raw` pairs are only positive for ANCOM and negative for GLMM with PIRLS. `r ANCOM_negative_PIRLS_positive_count_raw` are negative for ANCOM and positive for GLMM with PIRLS. Surprisingly, after adjustment, ANCOM identifies `r ANCOM_positive_count_adjusted` pairs of differential taxa and GLMM with PIRLS identifies `r  PIRLS_positive_count_adjusted` pairs.
+
+I decide to look at the `r ANCOM_positive_count_adjusted` pairs of taxa, provide scatter plots and refit differential analysis using my own version of IRWLS. During this process another issue popped up. When I fit my version of IRWLS to many pairs of taxa, the `lmer` function casts out warnings of "singular fit".
+
+
+```{r}
+taxa_pairs_subset <- taxa_pairs[which(taxa_pairs$ANCOM_adjusted < 0.05), ]
+result_file_subset <- file.path(folder, 'CAARS_Model_Summary', 
+                         'ANCOM_PIRLS_pval_comp_subset.csv')
+
+if (file.exists(result_file_subset)){
+  taxa_pairs_subset <- read.csv(result_file_subset)
+} else{
+  taxa_pairs_subset$IRWLS <- 0
+  IRWLS_start <- proc.time()
+  failed_rowid <- c()
+  for (j in 1:nrow(taxa_pairs_subset)){
+    t1 <- taxa_pairs_subset$Taxa1[j]
+    t2 <- taxa_pairs_subset$Taxa2[j]
+    selected_df <- cbind(covariates, t(filtered_count[c(t1, t2), ]))
+    
+    # plot
+    output_fname <- file.path(folder, 'plots', sprintf('%s_%s.pdf', t1, t2))
+    selected_df_copy <- selected_df
+    selected_df_copy$asthma <- as.factor(selected_df_copy$asthma)
+    scatter_plot <- ggplot(selected_df_copy, aes_string(x=t1, y=t2, color='asthma')) +
+      geom_jitter(alpha=0.6) +
+      theme_bw()
+    ggsave(output_fname, scatter_plot, width=15, height=12, units='cm')
+    
+    outcome <- tryCatch({
+      IRWLSmodel <- IRWLS(c(t1, t2),
+                         c('asthma'), 'SAMPLE_ID', selected_df)
+      IRWLS_result <- fixed_effects_summary(IRWLSmodel)
+      taxa_pairs_subset$IRWLS[j] <- IRWLS_result[2, 3]
+    },
+      error=function(err){
+        failed_rowid <<- c(failed_rowid, j)
+        return(err)
+      },
+      warning=function(wrn){
+        failed_rowid <<- c(failed_rowid, j)
+        return(wrn)
+      },
+      message=function(msg){
+        failed_rowid <<- c(failed_rowid, j)
+        return(msg)
+      }
+    )
+    if(inherits(outcome, "error")) next
+    if(inherits(outcome, "warning")) next
+    if(inherits(outcome, "message")) next
+  }
+IRWLS_duration <- proc.time() - IRWLS_start
+taxa_pairs_subset$IRWLS_failure <- 0
+taxa_pairs_subset$IRWLS_failure[failed_rowid] <- 1
+write.csv(taxa_pairs_subset,
+          file.path(folder, 'CAARS_Model_Summary', 'ANCOM_PIRLS_pval_comp_subset.csv'),
+          row.names = FALSE)
+}
+```
+
 
