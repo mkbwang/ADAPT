@@ -1,0 +1,171 @@
+---
+title: "Observation after Merging Genus & New Proposal"
+author: "Mukai Wang"
+date: "8/11/2022"
+output: pdf_document
+urlcolor: blue
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(dplyr)
+library(lme4)
+library(zoib)
+data_folder <- '/home/wangmk/UM/Research/MDAWG/Differential_Ratio/DiffRatio/RMD/CAARS_data'
+model_folder <- '/home/wangmk/UM/Research/MDAWG/Differential_Ratio/DiffRatio/RMD/CAARS_Model_Summary'
+```
+
+# Merging Data onto Class and Order level
+
+As discussed last time, I try to merge the taxa to higher levels before fitting GLMM. I choose to merge to _class_ and _order_ level. (Reminder: There are five levels _Phylum, Class, Order, Family, Genus_).
+
+```{r, echo=FALSE}
+metadata = read.csv(file.path(data_folder, 'filtered_metadata_class_level.csv'))
+counts_class_level = read.csv(file.path(data_folder, 'filtered_count_class_level.csv'),
+                              row.names = 1)
+counts_order_level = read.csv(file.path(data_folder, 'filtered_count_order_level.csv'),
+                              row.names = 1)
+```
+
+There are `r ncol(counts_order_level)` taxa on _order_ level and `r ncol(counts_class_level)` taxa on _class_ level. 
+
+
+```{r, echo=FALSE}
+pvals_class_level <- read.csv(file.path(model_folder, 'Pvals_class_level.csv'))
+ANCOM_adjusted_class <- p.adjust(pvals_class_level$wilx, method='BH')
+GLMM_adjusted_class <- p.adjust(pvals_class_level$GLMM_GQ_BOBYQA, method='BH')
+
+pvals_order_level <- read.csv(file.path(model_folder, 'Pvals_order_level.csv'))
+ANCOM_adjusted_order <- p.adjust(pvals_order_level$wilx, method='BH')
+GLMM_adjusted_order <- p.adjust(pvals_order_level$GLMM_GQ_BOBYQA, method='BH')
+```
+
+On the _class_ level, there are `r sum(ANCOM_adjusted_class < 0.05)` significant pairs based on ANCOM and `r sum(GLMM_adjusted_class < 0.05)` significant pairs based on GLMM. On the _order_ level, there are `r sum(ANCOM_adjusted_order < 0.05)` significant pairs based on ANCOM and `r sum(GLMM_adjusted_order < 0.05)` significant pairs based on GLMM. Let's take a closer look at the two significant pairs identified on _order_ level.
+
+```{r, echo=FALSE}
+indices <- which(ANCOM_adjusted_order > 0.05 & GLMM_adjusted_order < 0.05)
+taxon1_p1 <- pvals_order_level$Taxa1[indices[1]]
+taxon2_p1 <- pvals_order_level$Taxa2[indices[1]]
+taxon1_p2 <- pvals_order_level$Taxa1[indices[2]]
+taxon2_p2 <- pvals_order_level$Taxa2[indices[2]]
+```
+
+Pair 1 includes `r taxon1_p1` and `r taxon2_p1`. The scatterplot is
+
+```{r, echo=FALSE, out.width="60%"}
+data1 <- cbind(counts_order_level[, c(taxon1_p1, taxon2_p1)], 
+               metadata[, c('asthma', 'SAMPLE_ID')]) |>
+  as.data.frame()
+data1_copy <- data1
+data1_copy$asthma <- as.factor(data1_copy$asthma)
+ggplot(data1_copy, aes_string(x=taxon2_p1, y=taxon1_p1, color='asthma')) + geom_jitter(alpha=0.6) +
+  theme_bw()
+```
+
+```{r, echo=FALSE}
+# wilcoxon test
+data1_copy$o__Bifidobacteriales <- data1_copy$o__Bifidobacteriales + 1
+data1_copy$o__RF39 <- data1_copy$o__RF39 + 1
+data1_copy$logratio <- log(data1_copy$o__Bifidobacteriales)-log(data1_copy$o__RF39)
+wilx_test_1 <- wilcox.test(logratio~asthma, data=data1_copy)
+
+# GLMM
+formula1 <- sprintf("cbind(%s, %s) ~ %s + (1|%s)",
+                    taxon1_p1, taxon2_p1, 'asthma', 'SAMPLE_ID') |>
+  formula()
+model1_GQ <- glmer(formula1, data=data1, family="binomial",  nAGQ = 50,
+                control=lme4::glmerControl(optimizer='bobyqa',
+                                           optCtrl=list(maxfun=2e5)))
+```
+
+ANCOM provides a raw p value of `r round(wilx_test_1$p.value, digits=3)`. The GLMM has a raw p value of `r summary(model1_GQ)$coefficients[[8]]`.
+
+Pair 2 includes `r taxon1_p1` and `r taxon2_p1`. The scatterplot is
+
+```{r, echo=FALSE, message=FALSE, out.width="60%"}
+data2 <- cbind(counts_order_level[, c(taxon1_p2, taxon2_p2)], 
+               metadata[, c('asthma', 'SAMPLE_ID')]) |>
+  as.data.frame()
+data2_copy <- data2
+data2_copy$asthma <- as.factor(data2_copy$asthma)
+ggplot(data2_copy, aes_string(x=taxon2_p2, y=taxon1_p2, color='asthma')) + geom_jitter(alpha=0.6) +
+  theme_bw()
+```
+
+
+```{r, echo=FALSE}
+# wilcoxon test
+data2_copy$o__Bifidobacteriales <- data2_copy$o__Bifidobacteriales + 1
+data2_copy$o__Sphingobacteriales <- data2_copy$o__Sphingobacteriales + 1
+data2_copy$logratio <- log(data2_copy$o__Bifidobacteriales)-
+  log(data2_copy$o__Sphingobacteriales)
+wilx_test_2 <- wilcox.test(logratio~asthma, data=data2_copy)
+
+# GLMM
+formula2 <- sprintf("cbind(%s, %s) ~ %s + (1|%s)",
+                    taxon1_p2, taxon2_p2, 'asthma', 'SAMPLE_ID') |>
+  formula()
+model2_GQ <- glmer(formula2, data=data2, family="binomial",  nAGQ = 50,
+                control=lme4::glmerControl(optimizer='bobyqa',
+                                           optCtrl=list(maxfun=2e5)))
+```
+
+ANCOM provides a raw p value of `r round(wilx_test_2$p.value, digits=3)`. The GLMM has a raw p value of `r summary(model2_GQ)$coefficients[[8]]`.
+
+```{r, echo=FALSE}
+taxonomy <- read.csv(file.path(data_folder, 'tax_good.csv'))
+subset_tax_1 <- taxonomy %>% filter(grepl(taxon1_p1, Order, fixed = TRUE))
+subset_tax_2 <- taxonomy %>% filter(grepl(taxon2_p1, Order, fixed = TRUE))
+subset_tax_3 <- taxonomy %>% filter(grepl(taxon2_p2, Order, fixed = TRUE))
+```
+
+The three taxa on the _order_ level involved in the above two pairs only have `r length(unique(subset_tax_1$Genus))`, `r length(unique(subset_tax_2$Genus))` and `r length(unique(subset_tax_3$Genus))` genuses    correspondingly.
+
+
+At this point I have some comments:
+
+1. Merging data cannot avoid the problem of inflated zeros.
+
+2. Generalized linear mixed models struggle with estimating sparse responses.
+
+3. Can we really not extract any useful information from zero inflated data?
+
+
+# An Idea: Zero-One Inflated Beta Regression?
+
+I have noticed some papers using zero-inflated Beta regression to describe the distribution of relative abundances([Peng etal](https://pubmed.ncbi.nlm.nih.gov/26675626/), [Chai etal](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1006329) and [Ho etal](https://bmcbioinformatics.biomedcentral.com/articles/10.1186/s12859-019-2744-2)).
+
+In our case, when we look at the taxa in a pairwise fashion, the ratios are inflated at both one and zero. Take the second example data as an example.
+
+```{r, echo=FALSE, message=FALSE, out.width="60%"}
+data2$ratios = data2$o__Bifidobacteriales/
+  (data2$o__Bifidobacteriales+data2$o__Sphingobacteriales)
+data2_copy <- data2
+data2_copy$asthma <- as.factor(data2_copy$asthma)
+ggplot(data2_copy, aes(x=ratios, color=asthma)) + 
+  geom_histogram(fill="white")+xlab('Bifido/(Bifido + Sphingo)')
+```
+
+
+I search online and found an R package [`zoib`](https://www3.nd.edu/~fliu2/Rjournal_zoib.pdf) that can fit beta regression with inflation on both sides using Bayesian inference.
+
+
+```{r, message=FALSE}
+# I get rid of the individuals that don't have either Bifidobacteriales or Sphingobacteriales
+subdata2 <- data2[!is.nan(data2$ratios), ] 
+if (file.exists(file.path(model_folder, 'zoib_model.rds'))){
+  zibmodel <- readRDS(file.path(model_folder, 'zoib_model.rds'))
+} else{
+  zibmodel <- zoib(ratios ~ asthma|asthma|asthma|asthma, 
+                 data=subdata2, random=0, zero.inflation = TRUE,
+                 one.inflation = TRUE, joint=FALSE,
+                 n.iter=6000, n.thin=20, n.burn=1000)
+  saveRDS(zibmodel, file=file.path(model_folder, 'zoib_model.rds'))
+}
+
+coefficients <- zibmodel$coeff
+summary(coefficients)
+```
+
+From the summary we can see that the zero inflation probability seems to be significantly smaller for the asthma group.(The output isn't nicely formatted so it's hard to tell what each row of coefficient is referring to) Other parameters are not significantly different from zero. This reflects the pattern we observe in the histogram. 
