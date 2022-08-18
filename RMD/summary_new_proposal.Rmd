@@ -134,38 +134,140 @@ At this point I have some comments:
 
 # An Idea: Zero-One Inflated Beta Regression?
 
+```{r, echo=FALSE}
+example_pair <- c("o__Campylobacterales", "o__Synergistales")
+```
+
 I have noticed some papers using zero-inflated Beta regression to describe the distribution of relative abundances([Peng etal](https://pubmed.ncbi.nlm.nih.gov/26675626/), [Chai etal](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1006329) and [Ho etal](https://bmcbioinformatics.biomedcentral.com/articles/10.1186/s12859-019-2744-2)).
 
-In our case, when we look at the taxa in a pairwise fashion, the ratios are inflated at both one and zero. Take the second example data as an example.
+In our case, when we look at the taxa in a pairwise fashion, the ratios are inflated at zero and/or ones. Let's look at another pair of taxa `r example_pair[1]` and `r example_pair[2]`. First I provide a scatter plot.
 
 ```{r, echo=FALSE, message=FALSE, out.width="60%"}
-data2$ratios = data2$o__Bifidobacteriales/
-  (data2$o__Bifidobacteriales+data2$o__Sphingobacteriales)
-data2_copy <- data2
-data2_copy$asthma <- as.factor(data2_copy$asthma)
-ggplot(data2_copy, aes(x=ratios, color=asthma)) + 
-  geom_histogram(fill="white")+xlab('Bifido/(Bifido + Sphingo)')
+example_data <- cbind(metadata$asthma, counts_order_level[, example_pair]) %>%
+  as.data.frame()
+colnames(example_data) <- c("Asthma", example_pair)
+example_data$Asthma <- as.factor(example_data$Asthma)
+ggplot(example_data, aes_string(x=example_pair[2], y=example_pair[1], color="Asthma"))+
+  geom_jitter(alpha=0.6) +
+  theme_bw()
+```
+
+I also provide a histogram of `r example_pair[1]` proportion.
+
+```{r, echo=FALSE, message=FALSE, out.width="60%"}
+example_data$ratios = example_data[, 2] / (example_data[, 2] + example_data[, 3])
+ggplot(example_data, aes(x=ratios, color=Asthma)) +
+  geom_histogram(fill="white", binwidth = 0.1)+ 
+  xlab(sprintf('%s/(%s+%s)', example_pair[1], example_pair[1], example_pair[2])) +
+  theme_bw()
+```
+
+`r example_pair[1]` is present in all but one of these `r nrow(counts_order_level)` samples. In terms of `r example_pair[2]`, 
+
+```{r, echo=FALSE, message=FALSE}
+contingency_table <- example_data %>% group_by(Asthma) %>%
+  summarise(existence = sum(o__Synergistales > 0), 
+            absence=sum(o__Synergistales == 0))
+knitr::kable(contingency_table)
 ```
 
 
-I search online and found an R package [`zoib`](https://www3.nd.edu/~fliu2/Rjournal_zoib.pdf) that can fit beta regression with inflation on both sides using Bayesian inference.
+Based on the plots and the contingency table, I have two observations:
+
+1. The odds of `r example_pair[2]` being present in the sample is similar between patients with and without asthma.
+2. When `r example_pair[2]` exists in a sample, the ratio between `r example_pair[1]` and `r example_pair[2]` is higher in the patients without asthma.
+
+Now let's see how the ANCOM and GLMM view this pair of taxa.
+
+```{r, echo=FALSE}
+example_data_copy <- example_data
+example_data_copy$Asthma <- as.numeric(example_data_copy$Asthma) - 1
+```
+
+
+```{r,  message=FALSE}
+example_data_copy$logratio <- log(example_data[, 2] + 1) - log(example_data[, 3] + 1)
+wilx_test <- wilcox.test(logratio~Asthma, data=example_data_copy)
+```
+
+The Wilcoxon test under ANCOM provides a p value of `r wilx_test$p.value`.
+
+```{r, message=FALSE}
+example_data_copy$ID <- metadata$SAMPLE_ID
+glmm_test <- glmer(cbind(o__Campylobacterales, o__Synergistales) ~ Asthma + (1|ID),
+               data=example_data_copy, family="binomial", nAGQ = 50,
+               control=lme4::glmerControl(optimizer='bobyqa',
+                                          optCtrl=list(maxfun=2e5)))
+summary(glmm_test)
+```
+
+Neither the Wilcoxon test nor the GLMM reflects the pattern that we observe through the plots.
+
+
+I search online and found an R package [`zoib`](https://www3.nd.edu/~fliu2/Rjournal_zoib.pdf) that can fit beta regression with inflation on both sides using Bayesian inference. In their description, 
+
+$$
+f(y_{i}) = 
+\begin{cases}
+p_{i} \qquad \text{if } y_{i}=0\\
+(1-p_{i})q_{i}\qquad \text{if } y_{i}=1\\
+(1-p_{i})(1-q_{i})\text{Beta}(\alpha_{1i}, \alpha_{2i})\qquad \text{if }y_{i} \in (0, 1)
+\end{cases}
+$$
+
+The beta distribution has mean $\mu_{i} = \frac{\alpha_{1i}}{\alpha_{1i} + \alpha_{2i}}$ and variance $v_{i}=\mu_{i}(1-\mu_{i})(\alpha_{1i}+\alpha_{2i}+1)^{-1}$.
+
+$$
+\begin{aligned}
+\text{logit}(\mu_{i}) &= \mathbf{x}_{1i}^\top\mathbf{\beta}_{1i}\\
+\log(v_{i}) &= \mathbf{x}_{2i}^\top\mathbf{\beta}_{2i}\\
+\text{logit}(p_{i}) &= \mathbf{x}_{3i}^\top\mathbf{\beta}_{3i}\\
+\text{logit}(q_{i}) &= \mathbf{x}_{4i}^\top\mathbf{\beta}_{4i}
+\end{aligned}
+$$
+The package `zoib` implements Bayesian inference. By default, all the coefficients follow a weak prior of $N(0, 1000)$.
 
 
 ```{r, message=FALSE}
-# I get rid of the individuals that don't have either Bifidobacteriales or Sphingobacteriales
-subdata2 <- data2[!is.nan(data2$ratios), ] 
-if (file.exists(file.path(model_folder, 'zoib_model.rds'))){
-  zibmodel <- readRDS(file.path(model_folder, 'zoib_model.rds'))
-} else{
-  zibmodel <- zoib(ratios ~ asthma|asthma|asthma|asthma, 
-                 data=subdata2, random=0, zero.inflation = TRUE,
-                 one.inflation = TRUE, joint=FALSE,
-                 n.iter=6000, n.thin=20, n.burn=1000)
-  saveRDS(zibmodel, file=file.path(model_folder, 'zoib_model.rds'))
+example_data_copy$Asthma1 <- example_data_copy$Asthma
+example_data_copy$Asthma2 <- example_data_copy$Asthma
+example_data_copy$Asthma3 <- example_data_copy$Asthma
+
+
+if (file.exists(file.path(model_folder, 'oib_model.rds'))){
+  oibmodel <- readRDS(file.path(model_folder, 'oib_model.rds'))
+}else{
+  oibmodel <- zoib(ratios ~ Asthma1|Asthma2|Asthma3,
+                   data=example_data_copy, random=0, zero.inflation = FALSE,
+                   one.inflation = TRUE, joint=FALSE,
+                   n.iter=7000, n.thin=15, n.burn=1000)
+
+  saveRDS(oibmodel, file=file.path(model_folder, 'oib_model.rds'))
 }
 
-coefficients <- zibmodel$coeff
+coefficients <- oibmodel$coeff
 summary(coefficients)
 ```
 
-From the summary we can see that the zero inflation probability seems to be significantly smaller for the asthma group.(The output isn't nicely formatted so it's hard to tell what each row of coefficient is referring to) Other parameters are not significantly different from zero. This reflects the pattern we observe in the histogram. 
+The effects of asthma on the mean and variance of beta regression are significant but not significant on the one inflation probability. This output reflects our observation well.
+
+
+# Recap
+
+1. The ANCOM paper inspires us that applying pairwise analysis and then ensemble all the results together can potentially generate powerful conclusions.
+
+2. However, we don't agree with the detailed testing procedure for the pairwise analysis and the method of summarizing test outcomes in ANCOM paper. We'd like to keep the skeleton but change the flesh.
+
+3. We originally think about using GLMM for pairwise tests, but realizing that GLMM struggles with inflated zero counts in one(or both) taxa. The struggle reflects both its numerical instability and its inability to expose certain differential abundance patterns. 
+
+4. I propose using zero/one inflated beta regression. It is less prone from numerical issues and can expose important differential abundance patterns.
+
+5. There are a lot of details to cover, including
+ 
+ - Should we assign different weights to different observations?
+ 
+ - The significance from a zero/one inflated beta regression could have multiple meanings(higher zero/one inflation probability, difference in beta distrbution mean and variance). Summarizing these different significance implications is a challenge.
+ 
+ - How to carry out inference?(Bayesian vs Frequentist)
+
+
