@@ -1,0 +1,56 @@
+---
+title: "Initial Observation of Zero-One Inflated Model Performance"
+author: "Mukai Wang"
+date: "8/24/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Experiment
+
+Recall the model setup
+
+$$
+f(y_{i}) = 
+\begin{cases}
+p_{i} \qquad \text{if } y_{i}=0\\
+(1-p_{i})q_{i}\qquad \text{if } y_{i}=1\\
+(1-p_{i})(1-q_{i})\text{Beta}(\alpha_{1i}, \alpha_{2i})\qquad \text{if }y_{i} \in (0, 1)
+\end{cases}
+$$
+
+$$
+\begin{aligned}
+\text{logit}(\mu_{i}) &= \mathbf{x}_{1i}^\top\mathbf{\beta}_{1i}\\
+\log(v_{i}) &= \mathbf{x}_{2i}^\top\mathbf{\beta}_{2i}\\
+\text{logit}(p_{i}) &= \mathbf{x}_{3i}^\top\mathbf{\beta}_{3i}\\
+\text{logit}(q_{i}) &= \mathbf{x}_{4i}^\top\mathbf{\beta}_{4i}
+\end{aligned}
+$$
+
+Since the inflation estimation part is independent from the beta regression part, in my experiment I
+
+1. First run a logistic regression of zero inflation. Here I refer to odds of taxon 1 absent and taxon 2 present against all other scenarios.
+
+2. Secondly run a logistic regression of one inflation. I get rid of the samples with taxon 1 absent and taxon 2 present. Then I focus on the odds of taxon 1 present and taxon 2 absent against the rest of the scenarios. **I have included all the samples that have both taxa being absent as well**.
+
+3. Thirdly I run a beta regression on the samples that have both taxa present.
+
+Adjusting for p values should be careful. The logistic regressions will give a p value of 1 if the zero inflation/one inflation scenarios don't exist in any sample. I need to skip them. 
+
+There are 28 taxa on the _order_ level. I used the biostatistics cluster with 14 cores and 7G memory. 
+
+Show code here.
+
+# Result
+
+Each Bayesian beta regression ran for 10000 iterations with 2000 burnin and 20 iterations thinning. The program ran for 50 min. JAGS failed for two pairs of taxa. 
+
+Summarize the p values and show the scatter plots(combine the two plots into one).
+
+I suspect that there are some convergence issues with the slice sampling outcome because it seems that there are some false negatives
+
+
