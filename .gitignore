@@ -10,3 +10,4 @@
 *.pdf
 *.csv
 *_Model_Summary/
+*_plots/

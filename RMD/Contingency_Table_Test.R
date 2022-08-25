@@ -1,14 +1,18 @@
 
 # load data
+rm(list=ls())
+setwd("/home/wangmk/UM/Research/MDAWG/Differential_Ratio/DiffRatio/")
 source('RMD/preprocess.R')
+source('RMD/ANCOM.R')
 folder = 'RMD/CAARS_data'
-load(file.path(file.path(folder, 'CAARS_processed_GENUS.Rdata')))
-processed_data <- preprocess(CAARS.data.genus, 'SAMPLE_ID', "asthma")
+load(file.path(folder, 'CAARS_data_order_level.Rdata'))
+processed_data <- preprocess(phylodata_order, 'SAMPLE_ID', "asthma")
 
 
 filtered_count <- processed_data$feature_table
 filtered_metadata <- processed_data$meta_data
 struc_zero <- processed_data$structure_zeros
+
 
 included_genus <- names(which(rowSums(struc_zero) == 0))
 taxa_pairs <- combn(included_genus, 2) %>% t() %>% as.data.frame()
@@ -51,3 +55,4 @@ for (j in 1:nrow(taxa_pairs)){
 
 taxa_pairs$adjustedp <- p.adjust(taxa_pairs$pval, method='BH')
 write.csv(taxa_pairs, 'RMD/CAARS_Model_Summary/fisher_test.csv', row.names = FALSE)
+

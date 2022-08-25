@@ -7,6 +7,10 @@ output: pdf_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(zoib)
+library(dplyr)
+library(ggplot2)
+library(cowplot)
 ```
 
 # Experiment
@@ -37,20 +41,211 @@ Since the inflation estimation part is independent from the beta regression part
 
 2. Secondly run a logistic regression of one inflation. I get rid of the samples with taxon 1 absent and taxon 2 present. Then I focus on the odds of taxon 1 present and taxon 2 absent against the rest of the scenarios. **I have included all the samples that have both taxa being absent as well**.
 
-3. Thirdly I run a beta regression on the samples that have both taxa present.
+3. Thirdly I run a beta regression on the samples that have both taxa present. The program fits a normal distribution to the posterior distribution and I use the p values from the fitted normal distribution as the significance of beta distribution mean.
 
 Adjusting for p values should be careful. The logistic regressions will give a p value of 1 if the zero inflation/one inflation scenarios don't exist in any sample. I need to skip them. 
 
 There are 28 taxa on the _order_ level. I used the biostatistics cluster with 14 cores and 7G memory. 
 
-Show code here.
+```{r, eval=FALSE}
+
+# load all the data
+rm(list=ls())
+folder = '/home/wangmk/MDAWG/DiffRatio'
+counts_table <- read.csv(file.path(folder, 'filtered_count_order_level.csv'),
+                         row.names = 1)
+metadata <- read.csv(file.path(folder, 'filtered_metadata_order_level.csv'))
+
+# identify pairs of taxa that generates different outcomes under different model setting
+pvals_table <- read.csv(file.path(folder, 'Pvals_order_level.csv'))
+
+# wilx_adjusted <- p.adjust(pvals_table$wilx)
+# GLMM_adjusted <- p.adjust(pvals_table$GLMM_GQ_BOBYQA)
+
+library(foreach)
+library(doParallel)
+
+cores=detectCores()
+cl <- makeCluster(cores[1]-1) #not to overload your computer
+registerDoParallel(cl)
+
+outcome <- foreach(j=1:nrow(pvals_table), .combine=rbind,
+                       .packages=c('zoib', 'dplyr'),
+                       .inorder=FALSE,
+                        .errorhandling="remove") %dopar% {
+     t1 <- pvals_table$Taxa1[j]
+     t2 <- pvals_table$Taxa2[j]
+
+     counts_t1 <- counts_table[, t1]
+     counts_t2 <- counts_table[, t2]
+
+     t1pt2n <- (counts_t1 > 0) & (counts_t2 == 0)
+     t1nt2p <- (counts_t1 == 0) & (counts_t2 > 0)
+     t1prop <- counts_t1 / (counts_t1 + counts_t2)
+
+     df <- cbind(metadata$asthma, t1pt2n, t1nt2p, t1prop, counts_t1, counts_t2) %>% as.data.frame()
+     colnames(df) <- c("Asthma", "T1PT2N", 'T1NT2P', 'T1prop', 'count_t1', 'count_t2')
+
+     # first check if there is difference in zero inflation
+     zinfmodel <- glm(T1NT2P ~ Asthma, data=df,
+                      family = binomial(link = "logit"))
+     zinfpval <- summary(zinfmodel)$coefficients[2,4]
+     # pvals_table$infl0[j] <- zinfpval
+
+     df_filtered <- df %>% filter(!T1NT2P)
+     oinfmodel <- glm(T1PT2N ~ Asthma, data=df_filtered,
+                      family = binomial(link = "logit"))
+     oinfpval <- summary(oinfmodel)$coefficients[2,4]
+     # pvals_table$infl1[j] <- oinfpval
+
+     df_dp <- df %>% filter(count_t1 > 0 & count_t2 > 0)
+     betapval <- NA
+     if (nrow(df_dp) > 0){
+       invisible(betamodel <- zoib(T1prop ~ Asthma|Asthma,
+                         data=df_dp, random=0, zero.inflation = FALSE,
+                         one.inflation = FALSE, joint=FALSE,
+                         n.iter=10000, n.thin=20, n.burn=2000))
+       betareg_summary <- summary(betamodel$coeff)$statistics
+       beta_test_statistic <- -abs(betareg_summary[2,1] / betareg_summary[2,2])
+       betapval <- pnorm(beta_test_statistic)
+       # pvals_table$betareg[j] <- betapval
+     }
+     result = list(Rownum=j, Inf0 = zinfpval, Inf1=oinfpval,
+                   betapval=betapval)
+     return(as.data.frame(result))
+}
+
+write.csv(outcome, file.path(folder, 'Pvals_order_level_zoib.csv'),
+          row.names = FALSE)
+
+```
+
 
 # Result
 
-Each Bayesian beta regression ran for 10000 iterations with 2000 burnin and 20 iterations thinning. The program ran for 50 min. JAGS failed for two pairs of taxa. 
+```{r, echo=FALSE}
+data_folder = '/home/wangmk/UM/Research/MDAWG/Differential_Ratio/DiffRatio/RMD/CAARS_data'
+model_folder = '/home/wangmk/UM/Research/MDAWG/Differential_Ratio/DiffRatio/RMD/CAARS_Model_Summary'
+plot_folder = '/home/wangmk/UM/Research/MDAWG/Differential_Ratio/DiffRatio/RMD/CAARS_plots'
+counts_table <- read.csv(file.path(data_folder, 'filtered_count_order_level.csv'),
+                         row.names = 1)
+metadata <- read.csv(file.path(data_folder, 'filtered_metadata_order_level.csv'))
 
-Summarize the p values and show the scatter plots(combine the two plots into one).
+pvals <- read.csv(file.path(model_folder, 'Pvals_order_level.csv'))
+```
 
-I suspect that there are some convergence issues with the slice sampling outcome because it seems that there are some false negatives
+Each Bayesian beta regression ran for 10000 iterations with 2000 burnin and 20 iterations thinning. The program ran for 50 min. 
+
+```{r, echo=FALSE}
+biplot_viz <- function(tpair){
+  subset_data <- cbind(metadata$asthma, counts_table[, tpair]) %>%
+    as.data.frame()
+  colnames(subset_data) <- c("Asthma", tpair)
+  subset_data$ratios = subset_data[, 2] / (subset_data[, 2] + subset_data[, 3])
+  subset_data$Asthma <- as.factor(subset_data$Asthma)
+
+  # plot1_name <- sprintf('%s_%s_biplot.pdf', tpair[1], tpair[2])
+  count_plot <- ggplot(subset_data, aes_string(x=tpair[1], y=tpair[2], color='Asthma')) +
+    geom_jitter(alpha=0.6) + theme(axis.title = element_text(size = 10))  +
+    theme_bw()
+  # ggsave(file.path(plot_folder, 'biplots_significant', plot1_name),
+  #        plot=count_plot,
+  #        width=12, height=8, units="cm")
+
+  # plot2_name <- sprintf('%s_%s_Ratios.pdf', tpair[1], tpair[2])
+  ratio_plot <- ggplot(subset_data, aes(x=ratios, color=Asthma)) +
+    geom_histogram(fill="white", binwidth = 0.05)+
+    xlab(sprintf('%s/(%s+%s)', tpair[1], tpair[1], tpair[2])) + 
+    theme(axis.title = element_text(size = 10))  +
+    theme_bw()
+  
+  combined_plot <- plot_grid(count_plot, ratio_plot)
+  return(combined_plot)
+}
+```
 
 
+
+```{r, echo=FALSE}
+failed_pairs = which(is.na(pvals$betareg))
+pair1 <- c(pvals$Taxa1[failed_pairs[1]], pvals$Taxa2[failed_pairs[1]])
+pair2 <- c(pvals$Taxa1[failed_pairs[2]], pvals$Taxa2[failed_pairs[2]])
+```
+
+JAGS failed for `r length(failed_pairs)` pairs of taxa because only patients with asthma have two taxa both present. 
+
+```{r, echo=FALSE, message=FALSE, fig.width = 8, fig.height=3.5}
+plot1 <- biplot_viz(pair1)
+plot1
+```
+```{r, echo=FALSE, message=FALSE, fig.width = 8, fig.height=3.5}
+plot2 <- biplot_viz(pair2)
+plot2
+```
+
+
+```{r, echo=FALSE}
+
+ANCOM_pvals <- pvals$wilx
+ANCOM_pvals_adjusted <- p.adjust(ANCOM_pvals, method="BH")
+GLMM_pvals <- pvals$GLMM_GQ_BOBYQA
+GLMM_pvals_adjusted <- p.adjust(GLMM_pvals, method="BH")
+
+zinf_pval <- pvals$zinf
+zinf_pval_subset <- zinf_pval[zinf_pval < 1]
+zinf_pval_adjusted <- p.adjust(zinf_pval_subset, method="BH")
+oinf_pval <- pvals$oinf
+oinf_pval_subset <- oinf_pval[oinf_pval < 1]
+oinf_pval_adjusted <- p.adjust(oinf_pval_subset, method="BH")
+beta_pval <- pvals$betareg
+beta_pval_adjusted <- p.adjust(beta_pval, method="BH")
+
+```
+
+Recall that ANCOM found `r sum(ANCOM_pvals_adjusted < 0.05)` pairs of significant taxa. GLMM found `r sum(GLMM_pvals_adjusted < 0.05)` pairs of significant taxa. Under ZOIB model, `r sum(zinf_pval_adjusted < 0.05, na.rm=TRUE)` pairs of taxa were identified to be significant in terms of zero inflation. `r sum(oinf_pval_adjusted < 0.05, na.rm=TRUE)` pairs of taxa were identified to be significant in terms of one inflation. `r sum(beta_pval_adjusted < 0.05, na.rm=TRUE)` pairs of taxa were identified to be significant in terms of beta distribution mean.
+
+```{r, echo=FALSE}
+beta_significant_pairs <- which(beta_pval_adjusted < 0.05)
+```
+
+```{r, eval=FALSE,  echo=FALSE}
+for (j in 1:length(beta_significant_pairs)){
+  selected_pair <- c(pvals$Taxa1[j], pvals$Taxa2[j])
+  plot_name <- sprintf('%s_%s.png', selected_pair[1], selected_pair[2])
+  selected_plot <- biplot_viz(selected_pair)
+  ggsave(file.path(plot_folder, 'beta_significant', plot_name),
+         plot=selected_plot,
+         width=18, height=8, units="cm")
+}
+```
+
+
+
+```{r, echo=FALSE}
+pairs_names <- pvals[beta_significant_pairs, c("Taxa1", "Taxa2")]
+
+shorten_string <- function(mystr){
+  split_mystr <- strsplit(mystr, '__')
+  substr(split_mystr[[1]][2], 1, 6)
+}
+
+pairs_names$Taxa1 <- sapply(pairs_names$Taxa1, shorten_string)
+pairs_names$Taxa2 <- sapply(pairs_names$Taxa2, shorten_string)
+```
+
+
+
+```{r, echo=FALSE, fig.width=15, fig.height=7, message=FALSE}
+library(igraph)
+colnames(pairs_names) <- c("Source", "Target")
+nodes <- data.frame(name = unique(c(pairs_names$Source, pairs_names$Target)))
+network <- graph_from_data_frame(d=pairs_names, directed=FALSE, vertices=nodes)
+
+plot(network,  vertex.size = 6, label.font=6)
+```
+
+# Comments
+
+1. I suspect that there are false positives. It could be because the mixing of the Bayesian inference wasn't good enough. It could also be because of the way of summarizing p values using normality approximation. 
+
+2. It's most convincing to use some simulation experiments to have a grasp of type one error/power of zero inflated beta regression.
