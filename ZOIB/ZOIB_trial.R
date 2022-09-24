@@ -1,84 +1,99 @@
 # zero-one inflated beta regression
-
-library(zoib)
+library(betareg)
 library(dplyr)
 
 #--------------following code was run on biostat cluster---------------#
 
 # load all the data
 rm(list=ls())
-data_folder = '/home/wangmk/UM/Research/MDAWG/Differential_Ratio/DiffRatio/CAARS/CAARS_data'
-model_folder = '/home/wangmk/UM/Research/MDAWG/Differential_Ratio/DiffRatio/CAARS/CAARS_Model_Summary'
-# data_folder = '/home/wangmk/MDAWG/DiffRatio'
-# model_folder = '/home/wangmk/MDAWG/DiffRatio'
-counts_table <- read.csv(file.path(data_folder, 'filtered_count_order_level.csv'),
-                         row.names = 1)
-metadata <- read.csv(file.path(data_folder, 'filtered_metadata_order_level.csv'))
+folder = '/home/wangmk/UM/Research/MDAWG/DiffRatio/simulation'
 
-# identify pairs of taxa that generates different outcomes under different model setting
-pvals_table <- read.csv(file.path(model_folder, 'Pvals_order_level.csv'))
+data <- readRDS(file.path(folder, 'simulated_data.rds'))
+abn_info <- data$mean.eco.abn
+indicator <- data$grp - 1
 
-j <- 87
+taxa_names <- row.names(abn_info)
+taxa_pairs <- combn(taxa_names, 2) %>% t() %>% as.data.frame()
+colnames(taxa_pairs) <- c("T1", "T2")
 
-t1 <- pvals_table$Taxa1[j]
-t2 <- pvals_table$Taxa2[j]
+# start zero.one inflated beta regression
+zoib_result <- taxa_pairs
+zoib_result$zinfeffect <- NA
+zoib_result$zinfpval <- NA
+zoib_result$oinfeffect <- NA
+zoib_result$oinfpval <- NA
+zoib_result$betaeffect <- NA
+zoib_result$betapval <- NA
 
-counts_t1 <- counts_table[, t1]
-counts_t2 <- counts_table[, t2]
-
-t1pt2n <- (counts_t1 > 0) & (counts_t2 == 0)
-t1nt2p <- (counts_t1 == 0) & (counts_t2 > 0)
-t1nt2n <- (counts_t1 == 0) & (counts_t2 == 0)
-t1prop <- counts_t1 / (counts_t1 + counts_t2)
-
-df <- cbind(metadata$asthma, t1pt2n, t1nt2p, t1nt2n, t1prop, counts_t1, counts_t2) %>% as.data.frame()
-colnames(df) <- c("Asthma", "T1PT2N", 'T1NT2P', 'T1NT2N', 'T1prop', 'count_t1', 'count_t2')
-df_permuted <- df
-df_permuted$Asthma <- sample(df_permuted$Asthma)
-
-df <- df %>% filter(T1NT2N == 0)
-df_permuted <- df_permuted %>% filter(T1NT2N == 0)
+counts <- data$obs.abn
 
 ZOIB_test <- function(mydf){
-        # first check if there is difference in zero inflation
-        zinfmodel <- glm(T1NT2P ~ Asthma, data=mydf,
-                         family = binomial(link = "logit"))
-        zinfpval <- summary(zinfmodel)$coefficients[2,4]
-        # pvals_table$infl0[j] <- zinfpval
+  mydf <- mydf %>% filter(!t1nt2n)
+  result = list(zinfeffect=NA, zinfpval=NA,
+                oinfeffect=NA, oinfpval=NA,
+                betaeffect=NA, betapval=NA)
+  # first check if there is difference in zero inflation
+  if (sum(mydf$t1nt2p) > 0){
+    zinfmodel <- glm(t1nt2p ~ covar, data=mydf,
+                     family = binomial(link = "logit")) %>% summary()
+    result$zinfeffect <- zinfmodel$coefficients[2, 1]
+    result$zinfpval <- zinfmodel$coefficients[2,4]
+  }
 
-        mydf_filtered <- mydf %>% filter(!T1NT2P)
-        oinfmodel <- glm(T1PT2N ~ Asthma, data=mydf_filtered,
-                         family = binomial(link = "logit"))
-        oinfpval <- summary(oinfmodel)$coefficients[2,4]
-        # pvals_table$infl1[j] <- oinfpval
+  mydf_filtered <- mydf %>% filter(!t1nt2p)
+  if (sum(mydf_filtered$t1pt2n) > 0){
+    oinfmodel <- glm(t1pt2n ~ covar, data=mydf_filtered,
+                     family = binomial(link = "logit")) %>% summary()
+    result$oinfeffect <- oinfmodel$coefficients[2,1]
+    result$oinfpval <- oinfmodel$coefficients[2,4]
+  }
 
-        mydf_dp <- mydf %>% filter(count_t1 > 0 & count_t2 > 0)
-        betapval <- NA
-        if (nrow(mydf_dp) > 0){
-                invisible(betamodel <- zoib(T1prop ~ Asthma|Asthma,
-                                            data=mydf_dp, random=0, zero.inflation = FALSE,
-                                            one.inflation = FALSE, joint=FALSE,
-                                            n.iter=10000, n.thin=20, n.burn=2000))
-                betareg_summary <- summary(betamodel$coeff)$statistics
-                beta_test_statistic <- -abs(betareg_summary[2,1] / betareg_summary[2,2])
-                betapval <- pnorm(beta_test_statistic)
-                # pvals_table$betareg[j] <- betapval
-        }
-        result = list(Inf0 = zinfpval, Inf1=oinfpval,
-                      betapval=betapval)
-        return(result)
+  mydf_dp <- mydf %>% filter(T1 > 0 & T2 > 0)
+  if (nrow(mydf_dp) > 2){
+    invisible(beta_model <- betareg(prop ~ covar | covar, data=mydf_dp) %>% summary())
+    result$betaeffect <- beta_model$coefficients$mean[2, 1]
+    result$betapval <- beta_model$coefficients$mean[2, 4]
+  }
+
+  return(result)
 }
 
 
-original_testresult <- ZOIB_test(df)
-permuted_testresult <- ZOIB_test(df_permuted)
+library(foreach)
+library(doParallel)
+cores=detectCores()
+cl <- makeCluster(cores[1]-1) #not to overload your computer
+registerDoParallel(cl)
 
-originaldata_result <- sprintf("%s, %s, %f, %f, %f", t1, t2, original_testresult$Inf0,
-                               original_testresult$Inf1, original_testresult$betapval)
-permuteddata_result <- sprintf("%s, %s, %f, %f, %f", t1, t2, permuted_testresult$Inf0,
-                               permuted_testresult$Inf1, permuted_testresult$betapval)
 
-write(originaldata_result, file=file.path(model_folder, 'Pvals_order_level_ZOIB.csv'),
-      append=TRUE)
-write(permuteddata_result, file=file.path(model_folder, 'Pvals_order_level_ZOIB_permuted.csv'),
-      append=TRUE)
+ptm <- proc.time()
+outcome <- foreach(j=1:nrow(zoib_result), .combine=rbind,
+                   .packages=c('dplyr', 'betareg'), .inorder=FALSE) %dopar% {
+
+   t1 <- zoib_result$T1[j]
+   t2 <- zoib_result$T2[j]
+
+   selected_counts <- counts[c(t1, t2), ] %>% t() %>%
+     as.data.frame()
+   colnames(selected_counts) <- c('T1', 'T2')
+   selected_counts$covar <- indicator
+
+   selected_counts$t1pt2n <- (selected_counts$T1 > 0) & (selected_counts$T2 == 0)
+   selected_counts$t1nt2p <- (selected_counts$T1 == 0) & (selected_counts$T2 > 0)
+   selected_counts$t1nt2n <- (selected_counts$T1 == 0) & (selected_counts$T2 == 0)
+   selected_counts$prop <- selected_counts$T1/(selected_counts$T1 + selected_counts$T2)
+   test_result <- ZOIB_test(selected_counts)
+   test_result$ID <- j
+  return(as.data.frame(test_result))
+}
+duration <- proc.time() - ptm
+
+zoib_result$zinfeffect <- outcome$zinfeffect
+zoib_result$zinfpval <- outcome$zinfpval
+zoib_result$oinfeffect <- outcome$oinfeffect
+zoib_result$oinfpval <- outcome$oinfpval
+zoib_result$betaeffect <- outcome$betaeffect
+zoib_result$betapval <- outcome$betapval
+
+saveRDS(zoib_result, file=file.path(folder, 'ZOIB_result.rds'))
+
