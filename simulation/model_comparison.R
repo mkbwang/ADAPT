@@ -75,5 +75,69 @@ combination$ZOIB_decision <- ZOIB_decision
 pairs1 <- combination %>% filter(!diffratio & !GLMM_decision & ZOIB_decision)
 pairs2 <- combination %>% filter(diffratio & !GLMM_decision & ZOIB_decision)
 
+sample_mat <- data$obs.abn
+
+
+## example 1
+example_1 <- sample_mat[c("taxon2", "taxon36"), ] %>% t() %>% as.data.frame()
+example_1$grp <- data$grp - 1
+example_1$prop <- example_1$taxon2/(example_1$taxon2 + example_1$taxon36)
+example_1_copy <- example_1
+example_1_copy$grp <- as.factor(example_1_copy$grp)
+
+
+library(ggplot2)
+library(cowplot)
+library(betareg)
+library(lme4)
+
+scatterplot1 <- ggplot(example_1_copy, aes(x=taxon36, y=taxon2, color=grp)) +
+  geom_jitter(size=2, alpha=0.4, width=0.2, height=0.2) +
+  theme_bw() + theme(text = element_text(size = 14))
+histogram1 <- ggplot(example_1_copy , aes(x=prop, fill = grp))+
+  geom_histogram( color="#e9ecef", alpha=0.4, position = 'identity') +
+  theme_bw() + xlab("Proportion of taxon 2") + xlim(-0.05, 1.05)+
+  theme(text = element_text(size = 14))
+
+combined_plot1 <- plot_grid(scatterplot1, histogram1, align='h')
+
+example_1$tot <- example_1$taxon2 + example_1$taxon36
+
+example_1$ID <- row.names(example_1)
+example_1_filtered <- example_1 %>% filter(taxon2 > 0 & taxon36 > 0)
+example_1_filtered$weights <- example_1_filtered$tot/sum(example_1_filtered$tot) * nrow(example_1_filtered)
+
+beta_example1 <- betareg(prop ~ grp|grp, weights=weights, data=example_1_filtered)
+glmm_example1 <- glmer(cbind(taxon2, taxon36) ~ grp + (1|ID), family="binomial", data=example_1)
+
+
+
+
+## second example
+
+example_2 <- sample_mat[c("taxon152", "taxon161"), ] %>% t() %>% as.data.frame()
+example_2$grp <- data$grp - 1
+example_2$prop <- example_2$taxon152/(example_2$taxon152 + example_2$taxon161)
+example_2_copy <- example_2
+example_2_copy$grp <- as.factor(example_2_copy$grp)
+
+scatterplot2 <- ggplot(example_2_copy, aes(x=taxon161, y=taxon152, color=grp)) +
+  geom_jitter(size=2, alpha=0.4, width=0.2, height=0.2) +
+  theme_bw() + theme(text = element_text(size = 14))
+histogram2 <- ggplot(example_2_copy , aes(x=prop, fill = grp))+
+  geom_histogram( color="#e9ecef", alpha=0.4, position = 'identity') +
+  theme_bw() + xlab("Proportion of taxon 152") + xlim(-0.05, 1.05)+
+  theme(text = element_text(size = 14))
+
+combined_plot2 <- plot_grid(scatterplot2, histogram2, align='h')
+
+example_2$tot <- example_2$taxon152 + example_2$taxon161
+example_2$ID <- row.names(example_2)
+example_2_filtered <- example_2 %>% filter(taxon152 > 0 & taxon161 > 0)
+example_2_filtered$weights <- example_2_filtered$tot/sum(example_2_filtered$tot) * nrow(example_2_filtered)
+
+beta_example2 <- betareg(prop ~ grp|grp, weights=weights, data=example_2_filtered)
+glmm_example2 <- glmer(cbind(taxon152, taxon161) ~ grp + (1|ID), family="binomial", data=example_2,
+                       nAGQ=20)
 
 
