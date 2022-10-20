@@ -8,7 +8,9 @@ library(dplyr)
 rm(list=ls())
 folder = '/home/wangmk/UM/Research/MDAWG/DiffRatio/simulation'
 
-data <- readRDS(file.path(folder, 'simulated_data.rds'))
+fnum <- 1
+input_fname <- sprintf('simulated_data_%d.rds', fnum)
+data <- readRDS(file.path(folder, 'data', input_fname))
 abn_info <- data$mean.eco.abn
 indicator <- data$grp - 1
 
@@ -63,17 +65,18 @@ ZOIB_test <- function(mydf){
 
 library(foreach)
 library(doParallel)
-cores=detectCores()
+cores=parallelly::availableCores()
 cl <- makeCluster(cores[1]-1) #not to overload your computer
 registerDoParallel(cl)
 
 
 ptm <- proc.time()
-outcome <- foreach(j=1:nrow(zoib_result), .combine=rbind,
-                   .packages=c('dplyr', 'betareg'), .inorder=FALSE) %dopar% {
+outcome <- foreach(j=1:nrow(ZOIB_result), .combine=rbind,
+                   .packages=c('dplyr', 'betareg'), .inorder=FALSE,
+                   .errorhandling = "remove") %dopar% {
 
-   t1 <- zoib_result$T1[j]
-   t2 <- zoib_result$T2[j]
+   t1 <- as.character(zoib_result$T1[j])
+   t2 <- as.character(zoib_result$T2[j])
 
    selected_counts <- counts[c(t1, t2), ] %>% t() %>%
      as.data.frame()
@@ -90,6 +93,7 @@ outcome <- foreach(j=1:nrow(zoib_result), .combine=rbind,
 }
 duration <- proc.time() - ptm
 
+
 zoib_result$zinfeffect <- outcome$zinfeffect
 zoib_result$zinfpval <- outcome$zinfpval
 zoib_result$oinfeffect <- outcome$oinfeffect
@@ -97,5 +101,7 @@ zoib_result$oinfpval <- outcome$oinfpval
 zoib_result$betaeffect <- outcome$betaeffect
 zoib_result$betapval <- outcome$betapval
 
-saveRDS(zoib_result, file=file.path(folder, 'ZOIB_result.rds'))
+filename <- sprintf('zoib_result_%d.csv', fnum)
+write.csv(zoib_result, file.path(folder, 'ZOIB_result', filename),
+          row.names = FALSE)
 

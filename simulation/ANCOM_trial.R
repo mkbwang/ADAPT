@@ -1,7 +1,7 @@
 rm(list=ls())
 folder = '/home/wangmk/UM/Research/MDAWG/DiffRatio/simulation'
 # folder = '.'
-fnum <- as.integer(Sys.getenv("SLURM_ARRAY_TASK_ID"))
+fnum <- 1
 library(dplyr)
 input_fname <- sprintf('simulated_data_%d.rds', fnum)
 data <- readRDS(file.path(folder, 'data', input_fname))
@@ -22,13 +22,13 @@ ancom_result$pval <- NA
 
 library(foreach)
 library(doParallel)
-cores=detectCores()
+cores=parallelly::availableCores()
 cl <- makeCluster(cores[1]-1) #not to overload your computer
 registerDoParallel(cl)
 
 
 ptm <- proc.time()
-outcome <- foreach(j=1:700, .combine=rbind,
+outcome <- foreach(j=1:nrow(ancom_result), .combine=rbind,
                    .packages=c('dplyr'), .inorder=FALSE,
                    .errorhandling="remove") %dopar% {
   t1 <- as.character(ancom_result$T1[j])
