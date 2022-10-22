@@ -30,21 +30,22 @@ ANCOM_result <- read.csv(file.path(folder, 'ancom_result', ANCOM_file))
 ZOIB_file <- sprintf('zoib_result_%d.csv', fnum)
 ZOIB_result <- read.csv(file.path(folder, 'ZOIB_result', ZOIB_file))
 
-GLMM_result <- readRDS(file.path(folder, 'glmm_result.rds'))
+GLMM_file <- sprintf('glmm_result_%d.csv', fnum)
+GLMM_result <- read.csv(file.path(folder, 'glmm_result', GLMM_file))
 
-combination <- cbind(truth, ANCOM_result$pval, ZOIB_result$zinfpval,
-                     ZOIB_result$oinfpval, ZOIB_result$betapval)
+combination <- cbind(taxa_pairs, truth_vec, ANCOM_result$pval, ZOIB_result$zinfpval,
+                     ZOIB_result$oinfpval, ZOIB_result$betapval, GLMM_result$pval)
 colnames(combination) <- c("T1", "T2", "diffratio", "ANCOM_pval",
                             'ZOIB_zinf_pval', 'ZOIB_oinf_pval',
-                           'ZOIB_beta_pval')
+                           'ZOIB_beta_pval', 'GLMM_pval')
 
 
 combination_replicate <- combination
 
 combination_replicate$ANCOM_pval <- p.adjust(combination_replicate$ANCOM_pval,
                                              method='BH')
-# combination_replicate$GLMM_pval <- p.adjust(combination_replicate$GLMM_pval,
-#                                             method='BH')
+combination_replicate$GLMM_pval <- p.adjust(combination_replicate$GLMM_pval,
+                                            method='BH')
 combination_replicate$ZOIB_zinf_pval <- p.adjust(combination_replicate$ZOIB_zinf_pval,
                                             method='BH')
 combination_replicate$ZOIB_oinf_pval <- p.adjust(combination_replicate$ZOIB_oinf_pval,
@@ -53,15 +54,16 @@ combination_replicate$ZOIB_beta_pval <- p.adjust(combination_replicate$ZOIB_beta
                                                  method='BH')
 
 
-truth <- combination_replicate$diffratio
+
+## ANCOM performance
 ancom_decision <- combination_replicate$ANCOM_pval <0.05
 
-map_significance <- function(pairresult){
-  decision_mat <- matrix(FALSE, nrow=1000, ncol=1000)
+map_significance <- function(pairresult, num_taxa=1000){
+  decision_mat <- matrix(FALSE, nrow=num_taxa, ncol=num_taxa)
   cursor <- 1
-  for (j in 1:999){
-    decision_mat[j, (j+1):1000] <- pairresult[cursor: (cursor+1000-j-1)]
-    cursor <- cursor + 1000-j
+  for (j in 1:(num_taxa-1)){
+    decision_mat[j, (j+1):num_taxa] <- pairresult[cursor: (cursor+num_taxa-j-1)]
+    cursor <- cursor + num_taxa -j
   }
   decision_mat <- decision_mat + t(decision_mat)
   return(decision_mat)
@@ -72,47 +74,76 @@ difftaxa_truth <- abn_info$effect.size != 1
 
 library(pROC)
 ancom_decision_mat <- map_significance(ancom_decision)
-ancom_taxon_decision <- rowMeans(ancom_decision_mat)
-ancom_roc_dec <- roc(difftaxa_truth, ancom_taxon_decision)
-auc(ancom_roc_dec)
+ancom_taxon_prob <- rowMeans(ancom_decision_mat)
+# ancom_roc_dec <- roc(difftaxa_truth, ancom_taxon_decision)
 # ancom_difftaxa <- ancom_taxon_decision >= 0.9
 # table(difftaxa_truth, ancom_difftaxa)
 
-
+# ZOIB performance
 zinf_decision <- combination_replicate$ZOIB_zinf_pval < 0.05
 zinf_decision[is.na(zinf_decision)] <- FALSE
-oinf_decision <- combination_replicate$ZOIB_oinf_pval < 0.05
+oinf_decision <- combination_replicate$ZOIB_oinf_pval < 0.05/2
 oinf_decision[is.na(oinf_decision)] <- FALSE
-beta_decision <- combination_replicate$ZOIB_beta_pval < 0.05
+beta_decision <- combination_replicate$ZOIB_beta_pval < 0.05/3
 beta_decision[is.na(beta_decision)] <- FALSE
 
 ZOIB_decision <- zinf_decision | oinf_decision | beta_decision
 ZOIB_decision_mat <- map_significance(ZOIB_decision)
-ZOIB_taxon_decision <- rowMeans(ZOIB_decision_mat)
-ZOIB_roc_dec <- roc(difftaxa_truth, ZOIB_taxon_decision)
-auc(ZOIB_roc_dec)
+ZOIB_taxon_prob <- rowMeans(ZOIB_decision_mat)
+# ZOIB_roc_dec <- roc(difftaxa_truth, ZOIB_taxon_decision)
+# auc(ZOIB_roc_dec)
 
 
-table(truth, ancom_decision)
+# GLMM performance
+GLMM_decision <- combination_replicate$GLMM_pval < 0.05
+GLMM_decision_mat <- map_significance(GLMM_decision)
+GLMM_taxon_prob <- rowMeans(GLMM_decision_mat)
+
+
+taxa_decisions <- cbind(ancom_taxon_prob,
+                        ZOIB_taxon_prob,
+                        GLMM_taxon_prob) %>% as.data.frame()
+colnames(taxa_decisions) <- c("ANCOM", "ZOIB", "GLMM")
+taxa_decisions$truth <- difftaxa_truth
+
+
+threshold_selection <- function(rocobj){
+  TP <- length(rocobj$cases) * rocobj$sensitivities
+  FP <- length(rocobj$controls) * (1-rocobj$specificities)
+  FDR <- FP / (FP + TP)
+  cutoff <- rocobj$thresholds[min(which(FDR < 0.05))]
+  return(cutoff)
+}
+
+ancom_roc_dec <- roc(taxa_decisions$truth, taxa_decisions$ANCOM)
+ancom_threshold <- threshold_selection(ancom_roc_dec)
+ancom_taxon_decision <- taxa_decisions$ANCOM > ancom_threshold
+table(taxa_decisions$truth, ancom_taxon_decision)
+
+
+ZOIB_roc_dec <- roc(taxa_decisions$truth, taxa_decisions$ZOIB)
+ZOIB_threshold <- threshold_selection(ZOIB_roc_dec)
+ZOIB_taxon_decision <- taxa_decisions$ZOIB > ZOIB_threshold
+table(taxa_decisions$truth, ZOIB_taxon_decision)
+
+
+GLMM_roc_dec <- roc(taxa_decisions$truth, taxa_decisions$GLMM)
+GLMM_threshold <- threshold_selection(GLMM_roc_dec)
+GLMM_taxon_decision <- taxa_decisions$GLMM > GLMM_threshold
+table(taxa_decisions$truth, GLMM_taxon_decision)
+
+
+
+# ancom_difftaxa <- ancom_taxon_decision >= 0.9
+
+
+table(combination_replicate$diffratio, ancom_decision)
+table(combination_replicate$diffratio, ZOIB_decision)
+table(combination_replicate$diffratio, GLMM_decision)
+
 # table(truth, GLMM_decision)
 table(truth, ZOIB_decision)
 # table(GLMM_decision, ZOIB_decision)
 # table(ancom_decision, GLMM_decision)
 table(ancom_decision, ZOIB_decision)
-
-
-combination$ANCOM_decision <- ancom_decision
-combination$GLMM_decision <- GLMM_decision
-combination$ZOIB_decision <- ZOIB_decision
-
-
-pairs1 <- combination %>% filter(!diffratio & !GLMM_decision & ZOIB_decision)
-pairs2 <- combination %>% filter(diffratio & !GLMM_decision & ZOIB_decision)
-
-sample_mat <- data$obs.abn
-
-
-## example 1
-
-
 
