@@ -65,7 +65,6 @@ combination_replicate$ZOIB_pval <- p.adjust(combination_replicate$ZOIB_pval,
                                             method="BH")
 
 
-
 ## ANCOM performance
 ancom_decision <- combination_replicate$ANCOM_pval <0.05
 
@@ -83,7 +82,7 @@ map_significance <- function(pairresult, num_taxa=1000){
 # GLMM_decision <- combination_replicate$GLMM_pval <0.05
 difftaxa_truth <- abn_info$effect.size != 1
 
-library(pROC)
+# library(pROC)
 ancom_decision_mat <- map_significance(ancom_decision)
 ancom_taxon_prob <- rowMeans(ancom_decision_mat)
 
@@ -109,7 +108,7 @@ colnames(taxa_decisions) <- c("ANCOM", "ZOIB", "GLMM")
 taxa_decisions$truth <- difftaxa_truth
 
 
-threshold_selection <- function(rocobj){
+threshold_selection1 <- function(rocobj){
   TP <- length(rocobj$cases) * rocobj$sensitivities
   FP <- length(rocobj$controls) * (1-rocobj$specificities)
   FDR <- FP / (FP + TP)
@@ -117,23 +116,82 @@ threshold_selection <- function(rocobj){
   return(cutoff)
 }
 
-ancom_roc_dec <- roc(taxa_decisions$truth, taxa_decisions$ANCOM)
-ancom_threshold <- threshold_selection(ancom_roc_dec)
+threshold_selection2 <- function(probvecs){
+  pop_mean <- mean(probvecs)
+  uniqvals <- unique(probvecs) %>% sort()
+  j <- 1
+  group1 <- probvecs[probvecs <= uniqvals[j]]
+  group1mean <- mean(group1)
+  group2 <- probvecs[probvecs > uniqvals[j]]
+  group2mean <- mean(group2)
+  # seek largest intercluster variance
+  intercluster <- length(group1) * (group1mean - pop_mean)^2 +
+    length(group2) * (group2mean - pop_mean)^2
+  while(1){
+    group1 <- probvecs[probvecs <= uniqvals[j+1]]
+    group1mean <- mean(group1)
+    group2 <- probvecs[probvecs > uniqvals[j+1]]
+    group2mean <- mean(group2)
+    newintercluster <- length(group1) * (group1mean - pop_mean)^2 +
+      length(group2) * (group2mean - pop_mean)^2
+    if (newintercluster > intercluster){
+      intercluster <- newintercluster
+      j <- j+1
+    } else{
+      break
+    }
+  }
+  return(uniqvals[j])
+}
+
+
+
+# ancom_roc_dec <- roc(taxa_decisions$truth, taxa_decisions$ANCOM)
+ancom_threshold <- threshold_selection2(ancom_taxon_prob)
 ancom_taxon_decision <- taxa_decisions$ANCOM > ancom_threshold
 taxa_ancom_performance <- table(taxa_decisions$truth, ancom_taxon_decision) %>% as.vector()
 
+library(ggplot2)
 
-ZOIB_roc_dec <- roc(taxa_decisions$truth, taxa_decisions$ZOIB)
-ZOIB_threshold <- threshold_selection(ZOIB_roc_dec)
+
+# ZOIB_roc_dec <- roc(taxa_decisions$truth, taxa_decisions$ZOIB)
+ZOIB_threshold <- threshold_selection2(ZOIB_taxon_prob)
 ZOIB_taxon_decision <- taxa_decisions$ZOIB > ZOIB_threshold
 taxa_ZOIB_performance <- table(taxa_decisions$truth, ZOIB_taxon_decision) %>% as.vector()
 
 
-GLMM_roc_dec <- roc(taxa_decisions$truth, taxa_decisions$GLMM)
-GLMM_threshold <- threshold_selection(GLMM_roc_dec)
+# GLMM_roc_dec <- roc(taxa_decisions$truth, taxa_decisions$GLMM)
+GLMM_threshold <- threshold_selection2(GLMM_taxon_prob)
 GLMM_taxon_decision <- taxa_decisions$GLMM > GLMM_threshold
 taxa_GLMM_performance <- table(taxa_decisions$truth, GLMM_taxon_decision) %>% as.vector()
 
+
+hist_ancom <- ggplot(taxa_decisions, aes(x=ANCOM)) +
+  geom_histogram(color="black", fill="white", binwidth = 0.05) +
+  geom_vline(xintercept=ancom_threshold, linetype="dashed", color = "red")+
+  xlab("W/(K-1)") + ylab("Taxa Count")+
+  ggtitle("Wilkoxon")+xlim(0, 1)+
+  theme_bw()
+
+hist_ZOIB <- ggplot(taxa_decisions, aes(x=ZOIB)) +
+  geom_histogram(color="black", fill="white", binwidth = 0.05) +
+  geom_vline(xintercept=ZOIB_threshold, linetype="dashed", color = "red")+
+  xlab("W/(K-1)") + ylab("Taxa Count")+
+  ggtitle("ZOIB")+xlim(0, 1)+
+  theme_bw()
+
+hist_GLMM <- ggplot(taxa_decisions, aes(x=GLMM)) +
+  geom_histogram(color="black", fill="white", binwidth = 0.05) +
+  geom_vline(xintercept=GLMM_threshold, linetype="dashed", color = "red")+
+  xlab("W/(K-1)") + ylab("Taxa Count")+
+  ggtitle("GLMM")+xlim(0, 1)+
+  theme_bw()
+
+library(cowplot)
+
+hists <- plot_grid(hist_ancom,
+                   hist_ZOIB,
+                   hist_GLMM, ncol=3)
 
 pair_ancom_performance <- table(combination_replicate$diffratio, ancom_decision) %>% as.vector()
 pair_ZOIB_performance <- table(combination_replicate$diffratio, ZOIB_decision) %>% as.vector()
