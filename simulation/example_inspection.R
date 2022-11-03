@@ -30,20 +30,20 @@ ANCOM_result <- read.csv(file.path(folder, 'ancom_result', ANCOM_file))
 ZOIB_file <- sprintf('zoib_result_%d.csv', fnum)
 ZOIB_result <- read.csv(file.path(folder, 'ZOIB_result', ZOIB_file))
 
-GLMM_file <- sprintf('glmm_result_%d.csv', fnum)
-GLMM_result <- read.csv(file.path(folder, 'glmm_result', GLMM_file))
+GLMdisp_file <- sprintf('glmdisp_result_%d.csv', fnum)
+GLMdisp_result <- read.csv(file.path(folder, 'glmdisp_result', GLMdisp_file))
 
 combination <- cbind(taxa_pairs, truth_vec, ANCOM_result$pval, ZOIB_result$zinfpval,
-                     ZOIB_result$oinfpval, ZOIB_result$betapval, GLMM_result$pval)
+                     ZOIB_result$oinfpval, ZOIB_result$betapval, GLMdisp_result$pval)
 colnames(combination) <- c("T1", "T2", "diffratio", "ANCOM_pval",
                            'ZOIB_zinf_pval', 'ZOIB_oinf_pval',
-                           'ZOIB_beta_pval', 'GLMM_pval')
+                           'ZOIB_beta_pval', 'GLMdisp_pval')
 
 combination_replicate <- combination
 
 combination_replicate$ANCOM_pval <- p.adjust(combination_replicate$ANCOM_pval,
                                              method='BH')
-combination_replicate$GLMM_pval <- p.adjust(combination_replicate$GLMM_pval,
+combination_replicate$GLMdisp_pval <- p.adjust(combination_replicate$GLMdisp_pval,
                                             method='BH')
 
 fisher_combine <- function(separatetests){
@@ -66,13 +66,13 @@ combination_replicate$ZOIB_pval <- p.adjust(combination_replicate$ZOIB_pval,
 
 ancom_decision <- combination_replicate$ANCOM_pval <0.05
 ZOIB_decision <- combination_replicate$ZOIB_pval < 0.05
-GLMM_decision <- combination_replicate$GLMM_pval < 0.05
+GLMdisp_decision <- combination_replicate$GLMdisp_pval < 0.05
 
 pairs_conclusion <- data.frame(ID = 1:length(ancom_decision),
   truth = truth_vec,
                                ancom = ancom_decision,
                                zoib = ZOIB_decision,
-                               glmm = GLMM_decision)
+                               glmdisp = GLMdisp_decision)
 
 library(ggplot2)
 library("scales")
@@ -93,7 +93,7 @@ biplot_viz <- function(data, tpair){
     scale_x_continuous(breaks = pretty_breaks())+
     scale_y_continuous(breaks = pretty_breaks())+
     scale_color_manual(values=c("#E69F00", "#56B4E9"))+
-    xlim(-0.01, 1.01)+ scale_fill_manual(values=c("#E69F00", "#56B4E9"))+
+    xlim(-0.1, 1.05)+ scale_fill_manual(values=c("#E69F00", "#56B4E9"))+
     xlab(sprintf('%s/(%s+%s)', tpair[1], tpair[1], tpair[2])) + ylab("Count") +  theme_bw()
 
   logratio_plot <- ggplot(data, aes(x=Group, y=logratio)) +
@@ -110,7 +110,7 @@ biplot_viz <- function(data, tpair){
 
 # wilcoxon FP
 
-wilcox_FP <- pairs_conclusion %>% filter(!truth & ancom & !zoib & !glmm)
+wilcox_FP <- pairs_conclusion %>% filter(!truth & ancom & !zoib & !glmdisp)
 example_pair1 <- c(taxa_pairs$T1[wilcox_FP$ID[10]], taxa_pairs$T2[wilcox_FP$ID[10]])
 example_counts1 <- counts[example_pair1, ] %>% t() %>% as.data.frame()
 # example_counts1$proportion <- example_counts1$taxon1/(example_counts1$taxon1 + example_counts1$taxon91)
@@ -126,9 +126,13 @@ plot_wilcox_FP_combined <- plot_grid(plot_wilcox_FP$countplot,
 
 abn_info[example_pair1, ]
 
+ancom_feedback <- ANCOM_result[wilcox_FP$ID[10], ]
+ZOIB_feedback <- ZOIB_result[wilcox_FP$ID[10], ]
+GLMdisp_feedback <- GLMdisp_result[wilcox_FP$ID[10], ]
+
 
 # wilcoxon FN
-wilcox_FN <- pairs_conclusion %>% filter(truth & !ancom & zoib & glmm)
+wilcox_FN <- pairs_conclusion %>% filter(truth & !ancom & zoib & glmdisp)
 example_pair2 <- c(taxa_pairs$T1[wilcox_FN$ID[8]],
                    taxa_pairs$T2[wilcox_FN$ID[8]])
 example_counts2 <- counts[example_pair2, ] %>% t() %>% as.data.frame()
@@ -143,12 +147,14 @@ plot_wilcox_FN_combined <- plot_grid(plot_wilcox_FN$countplot,
 
 abn_info[example_pair2, ]
 
-ancom_feedback <- ANCOM_result[wilcox_FN$ID, ]
-ZOIB_feedback <- ZOIB_result[wilcox_FN$ID, ]
-GLMM_feedback <- GLMM_result[wilcox_FN$ID, ]
+
+ancom_feedback <- ANCOM_result[wilcox_FN$ID[8], ]
+ZOIB_feedback <- ZOIB_result[wilcox_FN$ID[8], ]
+GLMdisp_feedback <- GLMdisp_result[wilcox_FN$ID[8], ]
+
 
 # ZOIB FP
-ZOIB_FP <- pairs_conclusion %>% filter(!truth & !ancom & zoib & !glmm)
+ZOIB_FP <- pairs_conclusion %>% filter(!truth & !ancom & zoib & !glmdisp)
 example_pair3 <- c(taxa_pairs$T1[ZOIB_FP$ID[5]],
                    taxa_pairs$T2[ZOIB_FP$ID[5]])
 example_counts3 <- counts[example_pair3, ] %>% t() %>% as.data.frame()
@@ -166,11 +172,11 @@ abn_info[example_pair3, ]
 
 ancom_feedback <- ANCOM_result[ZOIB_FP$ID[5], ]
 ZOIB_feedback <- ZOIB_result[ZOIB_FP$ID[5], ]
-GLMM_feedback <- GLMM_result[ZOIB_FP$ID[5], ]
+GLMdisp_feedback <- GLMdisp_result[ZOIB_FP$ID[5], ]
 
 
 # ZOIB FN
-ZOIB_FN <- pairs_conclusion %>% filter(truth & ancom & !zoib & glmm)
+ZOIB_FN <- pairs_conclusion %>% filter(truth & ancom & !zoib & glmdisp)
 example_pair4 <- c(taxa_pairs$T1[3779],
                    taxa_pairs$T2[3779])
 example_counts4 <- counts[example_pair4, ] %>% t() %>% as.data.frame()
@@ -188,49 +194,49 @@ abn_info[example_pair4, ]
 
 ancom_feedback <- ANCOM_result[3779, ]
 ZOIB_feedback <- ZOIB_result[3779, ]
-GLMM_feedback <- GLMM_result[3779, ]
+GLMdisp_feedback <- GLMdisp_result[3779, ]
 
 
-# GLMM FP
-GLMM_FP <- pairs_conclusion %>% filter(!truth & !ancom & !zoib & glmm)
-example_pair5 <- c(taxa_pairs$T1[GLMM_FP$ID[6]],
-                   taxa_pairs$T2[GLMM_FP$ID[6]])
+# GLMdisp FP
+GLMdisp_FP <- pairs_conclusion %>% filter(!truth & !ancom & !zoib & glmdisp)
+example_pair5 <- c(taxa_pairs$T1[GLMdisp_FP$ID[20]],
+                   taxa_pairs$T2[GLMdisp_FP$ID[20]])
 example_counts5 <- counts[example_pair5, ] %>% t() %>% as.data.frame()
 example_counts5$Group <- rep(c(0, 1), each=50)
 example_counts5$Group <- as.factor(example_counts5$Group)
 
 
-plot_GLMM_FP <- biplot_viz(example_counts5, example_pair5)
-plot_GLMM_FP_combined <- plot_grid(plot_GLMM_FP$countplot,
-          plot_GLMM_FP$propplot,
-          plot_GLMM_FP$logratioplot,
+plot_GLMdisp_FP <- biplot_viz(example_counts5, example_pair5)
+plot_GLMdisp_FP_combined <- plot_grid(plot_GLMdisp_FP$countplot,
+          plot_GLMdisp_FP$propplot,
+          plot_GLMdisp_FP$logratioplot,
           ncol=2)
 
-ancom_feedback <- ANCOM_result[GLMM_FP$ID[6], ]
-ZOIB_feedback <- ZOIB_result[GLMM_FP$ID[6], ]
-GLMM_feedback <- GLMM_result[GLMM_FP$ID[6], ]
+ancom_feedback <- ANCOM_result[GLMdisp_FP$ID[20], ]
+ZOIB_feedback <- ZOIB_result[GLMdisp_FP$ID[20], ]
+GLMdisp_feedback <- GLMdisp_result[GLMdisp_FP$ID[20], ]
 
 abn_info[example_pair5, ]
 
 # GLMM FN
-GLMM_FN <- pairs_conclusion %>% filter(truth & ancom & zoib & !glmm)
+GLMdisp_FN <- pairs_conclusion %>% filter(truth & ancom & zoib & !glmdisp)
 example_pair6 <- c(taxa_pairs$T1[13105],
                    taxa_pairs$T2[13105])
 example_counts6 <- counts[example_pair6, ] %>% t() %>% as.data.frame()
 example_counts6$Group <- rep(c(0, 1), each=50)
 example_counts6$Group <- as.factor(example_counts5$Group)
 
-plot_GLMM_FN <- biplot_viz(example_counts6, example_pair6)
-plot_GLMM_FN_combined <- plot_grid(plot_GLMM_FN$countplot,
-          plot_GLMM_FN$propplot,
-          plot_GLMM_FN$logratioplot,
+plot_GLMdisp_FN <- biplot_viz(example_counts6, example_pair6)
+plot_GLMdisp_FN_combined <- plot_grid(plot_GLMdisp_FN$countplot,
+          plot_GLMdisp_FN$propplot,
+          plot_GLMdisp_FN$logratioplot,
           ncol=2)
 
 abn_info[example_pair6, ]
 
-ancom_feedback <- ANCOM_result[GLMM_FN$ID, ]
-ZOIB_feedback <- ZOIB_result[GLMM_FN$ID, ]
-GLMM_feedback <- GLMM_result[GLMM_FN$ID, ]
+ancom_feedback <- ANCOM_result[13105, ]
+ZOIB_feedback <- ZOIB_result[13105, ]
+GLMdisp_feedback <- GLMdisp_result[13105, ]
 
 
 
