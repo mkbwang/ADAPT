@@ -3,7 +3,7 @@ rm(list=ls())
 directory <- '/home/wangmk/UM/Research/MDAWG/DiffRatio/simulation'
 
 ancom_performance <- read.csv(file.path(directory, 'ancom_result', 'ancom_performance.csv'))
-glmm_performance <- read.csv(file.path(directory, 'glmm_result', 'glmm_performance.csv'))
+glmdisp_performance <- read.csv(file.path(directory, 'glmdisp_result', 'glmdisp_performance.csv'))
 ZOIB_performance <- read.csv(file.path(directory, 'ZOIB_result', 'ZOIB_performance.csv'))
 
 
@@ -21,8 +21,8 @@ perform_summary <- function(performance_df){
 
 ancom_summary <- perform_summary(ancom_performance)
 ancom_summary$method <- "Wilcoxon"
-glmm_summary <- perform_summary(glmm_performance)
-glmm_summary$method <- "GLMM"
+glmdisp_summary <- perform_summary(glmdisp_performance)
+glmdisp_summary$method <- "GLMdisp"
 ZOIB_summary <- perform_summary(ZOIB_performance)
 ZOIB_summary$method <- "ZOIB"
 
@@ -32,7 +32,7 @@ colnames(deseq2_summary) <- c("taxaFDR", "taxapower")
 deseq2_summary$method <- "DESeq2"
 
 
-combined_summary <- rbind(ancom_summary, glmm_summary, ZOIB_summary)
+combined_summary <- rbind(ancom_summary, glmdisp_summary, ZOIB_summary)
 
 
 library(ggplot2)
