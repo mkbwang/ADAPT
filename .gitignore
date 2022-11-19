@@ -5,12 +5,14 @@
 *.Rdata
 *_cache/
 *_files/
-*_data/
 *.html
 *.pdf
 *.csv
+*.xls
+*.rds
+*.txt
 *_Model_Summary/
 *_plots/
 archived_GLMM/
 */data/
-RMD/
+CAARS/

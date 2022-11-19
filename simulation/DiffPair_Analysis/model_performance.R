@@ -1,3 +1,4 @@
+# summary multiple differential pair detection algorithm performance
 rm(list=ls())
 
 folder = '/home/wangmk/UM/Research/MDAWG/DiffRatio/simulation'
