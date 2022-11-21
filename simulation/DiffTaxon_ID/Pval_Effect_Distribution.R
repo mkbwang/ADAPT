@@ -45,8 +45,8 @@ GLM_result = read.csv(file.path(pairGLM_folder,
 #                                                    T2 == example_taxon_highincrease)
 # GLM_result_lowincrease <-  GLM_result %>% filter(T1 == example_taxon_lowincrease |
 #                                                    T2 == example_taxon_lowincrease)
-GLM_result_stable <- GLM_result %>% filter(T1 == "taxon2" |
-                                             T2 == "taxon2")
+# GLM_result_stable <- GLM_result %>% filter(T1 == "taxon2" |
+#                                              T2 == "taxon2")
 
 # GLM_result_lowdecrease <-  GLM_result %>% filter(T1 == example_taxon_lowdecrease |
 #                                                    T2 == example_taxon_lowdecrease)
@@ -126,6 +126,19 @@ distmat <- proxy::dist(summary_teststat, method=hellinger_dist_norm)
 
 hier_clust <- hclust(distmat, method="average")
 
+library(ggdendro)
+library(ggplot2)
+dhc <- as.dendrogram(hier_clust)
+ddata <- dendro_data(dhc, type = "rectangle")
+
+denp<- ggplot(segment(ddata)) +
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend))+
+  geom_hline(yintercept=0.8, linetype="dashed")+ylab("Hellinger Distance")+
+  theme_bw() + theme(axis.title.x=element_blank(),
+                     axis.text.x=element_blank(),
+                     axis.ticks.x=element_blank())
+
+
 output <- cutree(hclust(distmat), k=3)
 pred_label <- c("Stable", "Increase", "Decrease")
 
@@ -136,6 +149,24 @@ true_abs_abundance$category <- (true_abs_abundance$effect.size == 1)+
 
 table(true_abs_abundance$prediction, true_abs_abundance$category)
 
+effsizes <- true_abs_abundance %>% select(effect.size, prediction) %>%
+  filter(effect.size != 1)
+effsizes$prediction <- pred_label[effsizes$prediction]
+effsizes$X <- "Fold Change"
+
+powerplot <- ggplot(effsizes, aes(x=X, y=effect.size, color=prediction)) +
+  geom_jitter(width=0.1, alpha=0.7, size=1) + ylim(0.1,10)+
+  scale_y_log10(breaks=c(seq(0.1, 0.9, 0.1), seq(1, 10, 1))) + theme()+
+  xlab("")+ylab("Fold Change") + theme_bw()+ theme(axis.title.x=element_blank(),
+                                                   axis.text.x=element_blank(),
+                                                   axis.ticks.x=element_blank(),
+                                                   legend.title=element_text(size=9),
+                                                   legend.text=element_text(size=8),
+                                                   legend.position = c(0.8, 0.2))
+
+library(cowplot)
+
+plot_grid(denp, powerplot, ncol=2)
 
 # hclusCut <- function(x, k, ...){
 #   distmat <- proxy::dist(x, method=hellinger_dist_norm)
