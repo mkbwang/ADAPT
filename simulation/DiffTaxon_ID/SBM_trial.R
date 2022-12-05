@@ -7,6 +7,25 @@ theme_set(theme_bw())
 
 rm(list=ls())
 
+example_mat <- rbind(c(0,1,0,1,0,1),
+                     c(0,0,0,1,0,0),
+                     c(0,1,0,1,0,1),
+                     c(0,0,0,0,0,1),
+                     c(0,1,0,1,0,1),
+                     c(0,0,0,0,0,0))
+example_mat <- example_mat + t(example_mat)
+original_plot <- plotMyMatrix(example_mat, dimLabels =c('example'))
+exampleSBM <- example_mat %>%
+  estimateSimpleSBM("bernoulli", dimLabels = 'example',
+                    estimOptions = list(verbosity = 1, plot = FALSE, nbCores=4,
+                                                                            exploreMin=2, exploreMax=4, nbBlocksRange=c(2, 4)))
+exampleSBM$setModel(2)
+exampleSBM$plot(type="data")
+clustered_plot <- plot(exampleSBM, type = "data", dimLabels  = c('example'))
+
+library(cowplot)
+toyexample_plot <- plot_grid(original_plot, clustered_plot, ncol=2)
+
 
 for (replicate in 1:100){
   # load the truth

@@ -1,6 +1,7 @@
 # compare GLMdisp and ANCOM in terms of
 
-
+library(dplyr)
+library(ggplot2)
 rm(list=ls())
 data_folder <- '/home/wangmk/UM/Research/MDAWG/DiffRatio/simulation/data'
 GLM_folder <- '/home/wangmk/UM/Research/MDAWG/DiffRatio/simulation/glmdisp_result'
@@ -66,34 +67,37 @@ for (j in 1:100){
   perf_df$ANCOM_SBM_power[j] <- ANCOM_SBM_performance$power
 }
 
-sum(perf_df$GLM_FDR < perf_df$ANCOM_FDR)
-sum(perf_df$GLM_power > perf_df$ANCOM_power)
 
 
 
 
-FDR_df <- data.frame(FDR = c(perf_df$GLM_FDR, perf_df$ANCOM_FDR),
-                     Method = rep(c("GLMDisp", "ANCOM"), each=100))
+FDR_df <- data.frame(FDR = c(perf_df$GLM_cutoff_FDR, perf_df$ANCOM_cutoff_FDR,
+                             perf_df$GLM_SBM_FDR, perf_df$ANCOM_SBM_FDR),
+                     Method = rep(c("GLMDisp_Cutoff", "ANCOM_Cutoff",
+                                    "GLMDisp_SBM", "ANCOM_SBM"), each=100))
+
 FDR_comparison_plot <- ggplot(FDR_df, aes(x=Method, y=FDR)) + geom_violin() +
   geom_boxplot(width=0.02) + ylim(0, 0.60) +
   geom_hline(yintercept=0.05, linetype="dashed", color="red")+
-  xlab("DiffRatio Method") + ylab("False Discovery Rate") +
+  xlab("Method") + ylab("False Discovery Rate") +
   theme_bw() + coord_flip()
 
 
 
+power_df <- data.frame(power = c(perf_df$GLM_cutoff_power, perf_df$ANCOM_cutoff_power,
+                                 perf_df$GLM_SBM_power, perf_df$ANCOM_SBM_power),
+                       Method = rep(c("GLMDisp_Cutoff", "ANCOM_Cutoff",
+                                      "GLMDisp_SBM", "ANCOM_SBM"), each=100))
 
-power_df <- data.frame(power = c(perf_df$GLM_power, perf_df$ANCOM_power),
-                       Method = rep(c("GLMDisp", "ANCOM"), each=100))
 power_comparison_plot <- ggplot(power_df, aes(x=Method, y=power)) + geom_violin() +
   geom_boxplot(width=0.1) +
-  xlab("DiffRatio Method") + ylab("Power") +
+  xlab("Method") + ylab("Power") +
   theme_bw() + coord_flip()
 
 library(cowplot)
 
 performance_plot <- plot_grid(FDR_comparison_plot, power_comparison_plot,
-                              nrow=1)
+                              nrow=2)
 
 # check an example
 
