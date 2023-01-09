@@ -5,16 +5,15 @@ library(dplyr)
 
 fnum <- 1
 input_fname <- sprintf('simulated_data_%d.rds', fnum)
-data <- readRDS(file.path(folder, 'data', input_fname))
+data <- readRDS(file.path(folder, 'data', 'semiparametric', input_fname))
 
-abn_info <- data$mean.eco.abn
+counts <- data$otu.tab.sim
 
-taxa_names <- row.names(abn_info)
+taxa_names <- row.names(counts)
 taxa_pairs <- combn(taxa_names, 2) %>% t() %>% as.data.frame()
 colnames(taxa_pairs) <- c("T1", "T2")
-counts <- data$obs.abn
 
-indicator <- data$grp - 1
+indicator <- as.vector(data$covariate)
 
 
 # GLM disp
@@ -24,7 +23,6 @@ glmdisp_result$effect <- 0
 glmdisp_result$SE <- 0
 glmdisp_result$pval <- 0
 
-indicator <- data$grp - 1
 
 # From dispmod package, Williams etal 1982
 glm.binomial.disp <- function(object, maxit = 30, verbose = TRUE)
@@ -136,13 +134,13 @@ outcome <- foreach(j=1:200, .combine=rbind,
 duration <- proc.time() - ptm
 
 
-glmm_result$effect[outcome$ID] <- outcome$effect
-glmm_result$SE[outcome$ID] <- outcome$SE
-glmm_result$pval[outcome$ID] <- outcome$pval
+glmdisp_result$effect[outcome$ID] <- outcome$effect
+glmdisp_result$SE[outcome$ID] <- outcome$SE
+glmdisp_result$pval[outcome$ID] <- outcome$pval
 
 
 filename <- sprintf('glmdisp_result_%d.csv', fnum)
-write.csv(ancom_result, file.path(folder, 'glmdisp_result', filename),
+write.csv(glmdisp_result, file.path(folder, 'glmdisp_result', filename),
           row.names = FALSE)
 
 
