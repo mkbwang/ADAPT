@@ -29,17 +29,17 @@ pi_update <- function(membermat){
 }
 
 ## M step, update the block connection probability
-theta_update <- function(adjmat, membermat){
+theta_update <- function(adjmat, membermat, restriction = FALSE){
 
   onesZD <- matrix(1, nrow=nrow(membermat), ncol=nrow(membermat)) -
     diag(nrow(membermat))
   updated_theta_mat <- (t(membermat) %*% adjmat %*% membermat) /
     (t(membermat) %*% onesZD %*% membermat)
   ## we want to see the connection probability in off-diagonal blocks being bigger than diagonal terms
-  # if (updated_theta_mat[1,2] < max(diag(updated_theta_mat))){
-  #   updated_theta_mat[1,2] <- max(diag(updated_theta_mat))
-  #   updated_theta_mat[2,1] <- max(diag(updated_theta_mat))
-  # }
+  if (restriction & (updated_theta_mat[1,2] < max(diag(updated_theta_mat)))){
+    updated_theta_mat[1,2] <- max(diag(updated_theta_mat))
+    updated_theta_mat[2,1] <- max(diag(updated_theta_mat))
+  }
 
   return(updated_theta_mat)
 } # maximization step, update block probability
@@ -65,16 +65,17 @@ pseudolik <- function(adjmat, membermat, pi_vec, theta_mat){
 
 
 ## complete EM function
-complete_EM <- function(adj, estim_membership){
+complete_EM <- function(adj, estim_membership, restriction=FALSE){
 
+  membership_iterlist <- list()
   pi_vec <- pi_update(estim_membership) # overall group proportion
 
   theta_mat <- theta_update(adj, estim_membership) # block probability
   ## we want to see the connection probability in off-diagonal blocks being bigger than diagonal terms
-  # if (theta_mat[1,2] < max(diag(theta_mat))){
-  #   theta_mat[1,2] <- max(diag(theta_mat))
-  #   theta_mat[2,1] <- max(diag(theta_mat))
-  # }
+  if (restriction & (theta_mat[1,2] < max(diag(theta_mat)))){
+    theta_mat[1,2] <- max(diag(theta_mat))
+    theta_mat[2,1] <- max(diag(theta_mat))
+  }
 
   entropy <- entropy_update(estim_membership)
   old_ELBO <- entropy + pseudolik(adj, estim_membership, pi_vec, theta_mat)
@@ -86,16 +87,16 @@ complete_EM <- function(adj, estim_membership){
     if(counter == 0){
       # cat("Initial group membership: \n", round(estim_membership[, 1], digits=4), "\n")
       cat("Initial ELBO: ", ELBO, "\n")
+      membership_iterlist <- append(membership_iterlist, estim_membership)
     }
 
     ## E step
     estim_membership <- membership_update(adj, estim_membership, pi_vec, theta_mat)
     ## M steps
     pi_vec <- pi_update(estim_membership) # overall group proportion
-    theta_mat <- theta_update(adj, estim_membership) # block probability
+    theta_mat <- theta_update(adj, estim_membership, restriction=restriction) # block probability
     entropy <- entropy_update(estim_membership)
     ELBO <- entropy + pseudolik(adj, estim_membership, pi_vec, theta_mat)
-
     counter <- counter + 1
     # cat("Group membership after iteration ", counter, ": \n", round(estim_membership[, 1], digits=4), '\n')
     cat("ELBO after iteration ", counter, ": ", ELBO, '\n')

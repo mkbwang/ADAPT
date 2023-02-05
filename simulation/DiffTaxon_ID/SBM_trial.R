@@ -8,62 +8,23 @@ theme_set(theme_bw())
 rm(list=ls())
 
 
+source('simulation/DiffTaxon_ID/SBM_utils.R')
 
-
-n <- 12 # nodes
-Z <- matrix(0, nrow=n, ncol=2)
-Z[1:6, 1] <- 1; Z[7:12, 2] <- 1
-# Z<-diag(Q)%x%matrix(1,npc,1)
-P<-matrix(c(0.6, 0.9, 0.9, 0.2), nrow=2)
-P[lower.tri(P)]<-t(P)[lower.tri(P)]
-set.seed(20)
-M<-1*(matrix(runif(n*n),n,n)<Z%*%P%*%t(Z)) ## adjacency matrix
-M[lower.tri(M)]<-t(M)[lower.tri(M)]
-# M <- matrix(1, nrow=10, ncol=10)
-diag(M) <- 0
-
-## estimation
-my_model <- BM_bernoulli("SBM_sym", M , plotting='', explore_min=2, explore_max=2, ncores=2, verbosity=6)
-my_model$estimate()
-my_model$memberships[[2]]$Z
-which.max(my_model$ICL)
-
-
-
-# example_mat <- rbind(c(0,1,0,1,0,1),
-#                      c(0,0,0,1,0,0),
-#                      c(0,1,0,1,0,1),
-#                      c(0,0,0,0,0,1),
-#                      c(0,1,0,1,0,1),
-#                      c(0,0,0,0,0,0))
-# example_mat <- example_mat + t(example_mat)
-# # original_plot <- plotMyMatrix(example_mat, dimLabels =c('example'))
-# exampleSBM <- BM_bernoulli(membership_type="SBM", adj=example_mat,
-#                            explore_min=2, explore_max=2)
-# exampleSBM$estimate()
-#
-# membershipprob <- exampleSBM$memberships[[2]]$Z
-
-# exampleSBM$plot(type="data")
-# clustered_plot <- plot(exampleSBM, type = "data", dimLabels  = c('example'))
-
-# library(cowplot)
-# toyexample_plot <- plot_grid(original_plot, clustered_plot, ncol=2)
-#
 
 # for (replicate in 1:100){
   # load the truth
-replicate <- 0
+replicate <- 10
 data_folder <- '/home/wangmk/UM/Research/MDAWG/DiffRatio/simulation/data/semiparametric'
 simulated_data = readRDS(file.path(data_folder,
-                                   'mini_simulated_data.rds'))
+                                   sprintf("simulated_data_%d.rds", replicate)))
 
 taxa_info <- data.frame(Taxa = simulated_data$otu.names,
                               DA = simulated_data$diff.otu.ind)
 
 # load the GLM pairwise analysis result
 GLM_folder <- '/home/wangmk/UM/Research/MDAWG/DiffRatio/simulation/glmdisp_result/semiparametric'
-GLM_result <- read.csv(file.path(GLM_folder, 'taxapair', 'glmdisp_result_mini.csv'))
+GLM_result <- read.csv(file.path(GLM_folder, 'taxapair',
+                                 sprintf('glmdisp_result_%d.csv', replicate)))
 # GLM_result$adjusted_pval <- p.adjust(GLM_result$pval, method='BH')
 GLM_result$decision <- GLM_result$pval < 0.05
 GLM_decision <- GLM_result %>% dplyr::select(T1, T2, decision)
@@ -84,16 +45,28 @@ for (j in 1:(dimension-1)){
 GLM_decision_mat <- GLM_decision_mat + t(GLM_decision_mat)
 # plotMyMatrix(GLM_decision_mat, dimLabels =c('Taxa'))
 
+
+# fit SBM model
+init_membership_degree <- cap_membership(degree_init(GLM_decision_mat))
+init_membership_sc <- spectral_clustering(GLM_decision_mat)
+init_membership_flat <- flat_init(GLM_decision_mat)
+result_degree <- complete_EM(GLM_decision_mat, init_membership_degree)
+result_sc <- complete_EM(GLM_decision_mat, init_membership_sc)
+result_flat <- complete_EM(GLM_decision_mat, init_membership_flat)
+result_pred_prob_degree <- result_degree$membership
+result_pred_prob_sc <- result_sc$membership
+
 # simplest SBM model with binary entries
 taxaSBM <- BM_bernoulli(membership_type="SBM_sym", adj=GLM_decision_mat,
                         explore_min=2, explore_max=2, plotting='', verbosity=6)
 taxaSBM$estimate()
 
+result_pred_prob_package <- taxaSBM$memberships[[2]]$Z
+difference <- result_pred_prob_sc - result_pred_prob_package
+max(abs(difference))
 
-## make the decision by checking the connection expectation within own group
-## low expectation corresponds to nonDA group
-expectations <- taxaSBM$memberships[[2]]$Z
-taxa_info$prediction <- expectations[, 1] < expectations[, 2]
+## make the decision
+taxa_info$prediction <- result_degree$membership[, 1] > 0.5
 
 output_filename <- sprintf('glmdisp_SBM_decision_%d.csv', replicate)
 write.csv(taxa_foldchange, file.path(GLM_folder, 'taxonindv', output_filename),

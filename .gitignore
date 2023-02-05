@@ -7,6 +7,7 @@
 *_files/
 *.html
 *.pdf
+*.Rmd
 *.csv
 *.xls
 *.rds
