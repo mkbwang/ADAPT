@@ -13,37 +13,22 @@ source('simulation/DiffTaxon_ID/SBM_utils.R')
 
 # for (replicate in 1:100){
   # load the truth
-replicate <- 10
+
+replicate <- 20
 data_folder <- '/home/wangmk/UM/Research/MDAWG/DiffRatio/simulation/data/semiparametric'
-simulated_data = readRDS(file.path(data_folder,
-                                   sprintf("simulated_data_%d.rds", replicate)))
-
-taxa_info <- data.frame(Taxa = simulated_data$otu.names,
-                              DA = simulated_data$diff.otu.ind)
-
-# load the GLM pairwise analysis result
 GLM_folder <- '/home/wangmk/UM/Research/MDAWG/DiffRatio/simulation/glmdisp_result/semiparametric'
+threshold <- 0.05
+
 GLM_result <- read.csv(file.path(GLM_folder, 'taxapair',
-                                 sprintf('glmdisp_result_%d.csv', replicate)))
-# GLM_result$adjusted_pval <- p.adjust(GLM_result$pval, method='BH')
-GLM_result$decision <- GLM_result$pval < 0.05
-GLM_decision <- GLM_result %>% dplyr::select(T1, T2, decision)
-GLM_decision_wide <- GLM_decision %>% reshape(idvar="T1", timevar="T2", direction="wide")
-dimension <- nrow(GLM_decision_wide) + 1
+                                 sprintf('glmdisp_result_null_%d.csv', replicate)))
 
-rm(GLM_result)
-rm(GLM_decision)
+simulated_data <- readRDS(file.path(data_folder,
+                                   sprintf("simulated_data_null_%d.rds", replicate)))
 
-## change from long vector to matrix
-GLM_decision_mat <- matrix(FALSE, nrow=dimension,
-                           ncol=dimension)
 
-for (j in 1:(dimension-1)){
-  GLM_decision_mat[j, (j+1):dimension] <- GLM_decision_wide[j, (j+1):dimension] %>%
-    as.numeric()
-}
-GLM_decision_mat <- GLM_decision_mat + t(GLM_decision_mat)
-# plotMyMatrix(GLM_decision_mat, dimLabels =c('Taxa'))
+GLM_decision_mat <- adjmat_generation(data_folder, GLM_folder, id=replicate, threshold=threshold)
+
+degrees <- colMeans(GLM_decision_mat)
 
 
 # fit SBM model
@@ -62,7 +47,7 @@ taxaSBM <- BM_bernoulli(membership_type="SBM_sym", adj=GLM_decision_mat,
 taxaSBM$estimate()
 
 result_pred_prob_package <- taxaSBM$memberships[[2]]$Z
-difference <- result_pred_prob_sc - result_pred_prob_package
+difference <- 1 - result_pred_prob_sc - result_pred_prob_package
 max(abs(difference))
 
 ## make the decision

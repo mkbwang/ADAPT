@@ -3,14 +3,14 @@ folder = '/home/wangmk/UM/Research/MDAWG/DiffRatio/simulation'
 # folder = '.'
 library(dplyr)
 
-fnum <- 1
-input_fname <- sprintf('simulated_data_%d.rds', fnum)
+fnum <- 14
+input_fname <- sprintf('simulated_data_null_%d.rds', fnum)
 data <- readRDS(file.path(folder, 'data', 'semiparametric', input_fname))
 
 counts <- data$otu.tab.sim
 
 taxa_names <- row.names(counts)
-taxa_pairs <- combn(taxa_names, 2) %>% t() %>% as.data.frame()
+taxa_pairs <- combn(taxa_names, 2) |> t() |> as.data.frame()
 colnames(taxa_pairs) <- c("T1", "T2")
 
 indicator <- as.vector(data$covariate)
@@ -104,8 +104,8 @@ registerDoParallel(cl)
 
 
 ptm <- proc.time()
-outcome <- foreach(j=1:200, .combine=rbind,
-                   .packages=c('dplyr'), .inorder=FALSE) %dopar% {
+outcome <- foreach(j=1:nrow(glmdisp_result), .combine=rbind,
+                   .packages="dplyr", .inorder=FALSE) %dopar% {
                      result <- list(ID=j, effect=NA, SE=NA, pval=NA)
                      t1 <- as.character(glmdisp_result$T1[j])
                      t2 <- as.character(glmdisp_result$T2[j])

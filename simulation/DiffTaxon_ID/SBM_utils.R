@@ -1,6 +1,39 @@
 # SBM_utils
 library(MatrixGenerics)
 
+
+adjmat_generation <- function(data_folder, GLM_folder, id, threshold=0.05){
+
+  simulated_data = readRDS(file.path(data_folder,
+                                     sprintf("simulated_data_null_%d.rds", id)))
+
+
+  # load the GLM pairwise analysis result
+  GLM_result <- read.csv(file.path(GLM_folder, 'taxapair',
+                                   sprintf('glmdisp_result_null_%d.csv', id)))
+  # GLM_result$adjusted_pval <- p.adjust(GLM_result$pval, method='BH')
+  GLM_result$decision <- GLM_result$pval < threshold
+  GLM_decision <- GLM_result %>% dplyr::select(T1, T2, decision)
+  GLM_decision_wide <- GLM_decision %>% reshape(idvar="T1", timevar="T2", direction="wide")
+  dimension <- nrow(GLM_decision_wide) + 1
+
+  rm(GLM_result)
+  rm(GLM_decision)
+
+  ## change from long vector to matrix
+  GLM_decision_mat <- matrix(FALSE, nrow=dimension,
+                             ncol=dimension)
+
+  for (j in 1:(dimension-1)){
+    GLM_decision_mat[j, (j+1):dimension] <- GLM_decision_wide[j, (j+1):dimension] %>%
+      as.numeric()
+  }
+  GLM_decision_mat <- GLM_decision_mat + t(GLM_decision_mat)
+
+  return(GLM_decision_mat)
+
+}
+
 ## prevent probability estimate from being exactly zero during the iteration
 cap_membership <- function(memmat, gap=1e-5){
   upper_bound <- 1 - gap/nrow(memmat)
