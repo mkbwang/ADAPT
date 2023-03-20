@@ -101,8 +101,8 @@ pseudolik <- function(adjmat, membermat, pi_vec, theta_mat){
 complete_EM <- function(adj, estim_membership, restriction=FALSE){
 
   membership_iterlist <- list()
+  theta_iterlist <- list()
   pi_vec <- pi_update(estim_membership) # overall group proportion
-
   theta_mat <- theta_update(adj, estim_membership) # block probability
   ## we want to see the connection probability in off-diagonal blocks being bigger than diagonal terms
   if (restriction & (theta_mat[1,2] < max(diag(theta_mat)))){
@@ -113,14 +113,15 @@ complete_EM <- function(adj, estim_membership, restriction=FALSE){
   entropy <- entropy_update(estim_membership)
   old_ELBO <- entropy + pseudolik(adj, estim_membership, pi_vec, theta_mat)
   ELBO <- old_ELBO
-  counter <- 0 # iteration counter
+  counter <- 1 # iteration counter
 
   # EM iteration
   repeat{
-    if(counter == 0){
+    if(counter == 1){
       # cat("Initial group membership: \n", round(estim_membership[, 1], digits=4), "\n")
       cat("Initial ELBO: ", ELBO, "\n")
-      membership_iterlist <- append(membership_iterlist, estim_membership)
+      membership_iterlist[[1]] <- estim_membership
+      theta_iterlist[[1]] <- theta_mat
     }
 
     ## E step
@@ -131,6 +132,9 @@ complete_EM <- function(adj, estim_membership, restriction=FALSE){
     entropy <- entropy_update(estim_membership)
     ELBO <- entropy + pseudolik(adj, estim_membership, pi_vec, theta_mat)
     counter <- counter + 1
+
+    membership_iterlist[[counter]] <- estim_membership
+    theta_iterlist[[counter]] <- theta_mat
     # cat("Group membership after iteration ", counter, ": \n", round(estim_membership[, 1], digits=4), '\n')
     cat("ELBO after iteration ", counter, ": ", ELBO, '\n')
 
@@ -140,7 +144,7 @@ complete_EM <- function(adj, estim_membership, restriction=FALSE){
       break
     }
   }
-  return(list(membership=estim_membership, theta=theta_mat, ELBO = ELBO))
+  return(list(membership=membership_iterlist, theta=theta_iterlist, ELBO = ELBO))
 }
 
 

@@ -1,5 +1,95 @@
 library(phyloseq)
 
+
+abn.tab.gen_simple <- function(n.taxa=60, n.samp.grp1=50, n.samp.grp2=50, abn=200,
+                               prop.diff=0.5, abn.seed=2021, obs.seed=2022){
+  # Total number of samples
+  n.samp=n.samp.grp1+n.samp.grp2
+  set.seed(abn.seed)
+
+  # expected absolute abundance
+  lambda = rgamma(n.taxa, shape=abn, rate=1)
+
+  # Which taxa are differentially abundant
+  diff.ind=rep(0, n.taxa)
+  # Differentially abundant taxa
+  diff.pos=sample(c(1:n.taxa), floor(n.taxa*prop.diff), replace=FALSE)
+  diff.ind[diff.pos]=1
+
+  # Effect size
+  effect.size=rep(1, n.taxa)
+  effect.size[diff.pos]=rexp(n=length(diff.pos), rate=1) + 1
+  names(effect.size)=paste0("taxon", seq(n.taxa))
+
+  # Mean absolute abundance in the ecosystem
+  temp.grp1=round(lambda); temp.grp2=round(lambda)
+  if (length(diff.pos) > 0){
+    for (i in diff.pos) {
+      rand.ind=sample(c(1, 2), 1)
+      if (rand.ind==1){
+        temp.grp1[i]=round(temp.grp1[i]*effect.size[i])
+      }else{
+        temp.grp2[i]=round(temp.grp2[i]*effect.size[i])
+      }
+    }
+  }
+  effect.size <- temp.grp1 / temp.grp2
+  names(effect.size)=paste0("taxon", seq(n.taxa))
+  temp.dat=data.frame(temp.grp1, temp.grp2, effect.size)
+  rownames(temp.dat)=paste0("taxon", seq(n.taxa))
+
+  # Absolute abundance in ecosystems
+  abn.mat=matrix(0, ncol=n.samp, nrow=n.taxa)
+  for(i in 1:n.taxa){
+    abn.mat[i, ]=c(rpois(n.samp.grp1, temp.grp1[i]), rpois(n.samp.grp2, temp.grp2[i]))
+  }
+
+  # Microbial load
+  abn.total=colSums(abn.mat)
+  names(abn.total)=paste0("sub", seq(n.samp))
+  abn.prob.mat=t(t(abn.mat)/abn.total)
+
+  depth=1/runif(n.samp, 10, 20)
+
+  # Construct unbalanced library sizes
+  obs.total=round(abn.total*depth)
+  names(obs.total)=paste0("sub", seq(n.samp))
+
+  # Absolute abundance in samples
+  set.seed(obs.seed)
+  obs.list=lapply(1:n.samp, function(i)
+    phyloseq:::rarefaction_subsample(x=abn.mat[, i], sample.size=obs.total[i]))
+  obs.mat=Reduce('cbind', obs.list)
+
+  # Prepare outputs
+  abn.dat=data.frame(abn.mat, row.names = NULL)
+  rownames(abn.dat)=paste0("taxon", seq(n.taxa))
+  colnames(abn.dat)=paste0("sub", seq(n.samp))
+
+  obs.dat=data.frame(obs.mat, row.names = NULL)
+  rownames(obs.dat)=paste0("taxon", seq(n.taxa))
+  colnames(obs.dat)=paste0("sub", seq(n.samp))
+
+  abn.prob.dat=data.frame(abn.prob.mat, row.names = NULL)
+  rownames(abn.prob.dat)=paste0("taxon", seq(n.taxa))
+  colnames(abn.prob.dat)=paste0("sub", seq(n.samp))
+
+  grp.ind=c(rep(1, n.samp.grp1), rep(2, n.samp.grp2))
+  names(grp.ind)=paste0("sub", seq(n.samp))
+
+  names(diff.ind)=paste0("taxon", seq(n.taxa))
+
+  # Sampling fractions
+  c.mult=obs.total/abn.total
+  names(c.mult)=paste0("sub", seq(n.samp))
+
+  test.data=list(temp.dat, abn.dat, obs.dat, effect.size, grp.ind,
+                 diff.ind,  c.mult, abn.total, obs.total)
+  names(test.data)=c("mean.eco.abn", "eco.abn", "obs.abn", "effect.size", "grp",
+                     "diff.taxa", "samp.frac", "micro.load", "lib.size")
+  return(test.data)
+}
+
 abn.tab.gen1=function(n.taxa, n.samp.grp1, n.samp.grp2, low.abn, med.abn, high.abn,
                       prop.diff, abn.seed, obs.seed, struc.zero.prop, out.zero.prop,
                       balanced.micro.load = c(TRUE, FALSE),

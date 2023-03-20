@@ -3,17 +3,21 @@ folder = '/home/wangmk/UM/Research/MDAWG/DiffRatio/simulation'
 # folder = '.'
 library(dplyr)
 
-fnum <- 14
-input_fname <- sprintf('simulated_data_null_%d.rds', fnum)
-data <- readRDS(file.path(folder, 'data', 'semiparametric', input_fname))
+#fnum <- 14
+input_fname <- 'simple_simulation_withDA2.rds'
+data <- readRDS(file.path(folder, 'data', 'PoiGamma', input_fname))
 
-counts <- data$otu.tab.sim
+truth <- data$mean.eco.abn
+filename <- 'simple_DA_truth2.csv'
+write.csv(truth, file.path(folder, 'glmdisp_result', filename),
+          row.names = FALSE)
+counts <- data$obs.abn
 
 taxa_names <- row.names(counts)
 taxa_pairs <- combn(taxa_names, 2) |> t() |> as.data.frame()
 colnames(taxa_pairs) <- c("T1", "T2")
 
-indicator <- as.vector(data$covariate)
+indicator <- as.vector(data$grp) - 1
 
 
 # GLM disp
@@ -100,9 +104,6 @@ registerDoParallel(cl)
 
 
 
-
-
-
 ptm <- proc.time()
 outcome <- foreach(j=1:nrow(glmdisp_result), .combine=rbind,
                    .packages="dplyr", .inorder=FALSE) %dopar% {
@@ -139,7 +140,7 @@ glmdisp_result$SE[outcome$ID] <- outcome$SE
 glmdisp_result$pval[outcome$ID] <- outcome$pval
 
 
-filename <- sprintf('glmdisp_result_%d.csv', fnum)
+filename <- 'glmdisp_simple_result_withDA2.csv'
 write.csv(glmdisp_result, file.path(folder, 'glmdisp_result', filename),
           row.names = FALSE)
 

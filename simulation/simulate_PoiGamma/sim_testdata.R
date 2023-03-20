@@ -1,6 +1,9 @@
 rm(list=ls())
 folder = '/home/wangmk/UM/Research/MDAWG/DiffRatio/simulation'
 
+library(phyloseq)
+source(file.path(folder, 'simulate_PoiGamma', 'sim_data_poi_gam_two_grp.R'))
+
 
 num_taxa = 1000
 sample_num_grp1 <- 50
@@ -16,8 +19,27 @@ balanced_microbiome_load <- FALSE
 balanced_libsize <- TRUE
 sample_fraction <- 'small'
 
-library(phyloseq)
-source(file.path(folder, 'sim_data_poi_gam_two_grp.R'))
+
+example_withDA <- abn.tab.gen_simple(n.taxa=60, n.samp.grp1=50, n.samp.grp2=50,
+                                     abn=60, prop.diff=0.5, abn.seed=2021, obs.seed=2022)
+
+example_withDA2 <- abn.tab.gen_simple(n.taxa=100, n.samp.grp1=50, n.samp.grp2=50,
+                                     abn=60, prop.diff=0.5, abn.seed=2022, obs.seed=2023)
+
+saveRDS(example_withDA,
+        file=file.path(folder, 'data', 'PoiGamma', 'simple_simulation_withDA.rds'))
+
+saveRDS(example_withDA2,
+        file=file.path(folder, 'data', 'PoiGamma', 'simple_simulation_withDA2.rds'))
+
+
+example_noDA <- abn.tab.gen_simple(n.taxa=60, n.samp.grp1=50, n.samp.grp2=50,
+                                   abn=60, prop.diff=0, abn.seed=2021, obs.seed=2022)
+
+
+saveRDS(example_noDA,
+        file=file.path(folder, 'data', 'PoiGamma', 'simple_simulation_noDA.rds'))
+
 
 
 for (seed in c(47)){
