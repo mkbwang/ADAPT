@@ -2,6 +2,7 @@
 library(tidyverse)
 library(blockmodels)
 library(ggplot2)
+library(cowplot)
 library(knitr)
 theme_set(theme_bw())
 
@@ -13,56 +14,155 @@ source('simulation/DiffTaxon_ID/SBM_utils.R')
 
 # for (replicate in 1:100){
   # load the truth
-replicate <- 10
+
+replicate <- 20
 data_folder <- '/home/wangmk/UM/Research/MDAWG/DiffRatio/simulation/data/semiparametric'
-simulated_data = readRDS(file.path(data_folder,
-                                   sprintf("simulated_data_%d.rds", replicate)))
-
-taxa_info <- data.frame(Taxa = simulated_data$otu.names,
-                              DA = simulated_data$diff.otu.ind)
-
-# load the GLM pairwise analysis result
 GLM_folder <- '/home/wangmk/UM/Research/MDAWG/DiffRatio/simulation/glmdisp_result/semiparametric'
+
 GLM_result <- read.csv(file.path(GLM_folder, 'taxapair',
-                                 sprintf('glmdisp_result_%d.csv', replicate)))
-# GLM_result$adjusted_pval <- p.adjust(GLM_result$pval, method='BH')
-GLM_result$decision <- GLM_result$pval < 0.05
-GLM_decision <- GLM_result %>% dplyr::select(T1, T2, decision)
-GLM_decision_wide <- GLM_decision %>% reshape(idvar="T1", timevar="T2", direction="wide")
-dimension <- nrow(GLM_decision_wide) + 1
+                                 sprintf('glmdisp_result_null_%d.csv', replicate)))
 
-rm(GLM_result)
-rm(GLM_decision)
 
-## change from long vector to matrix
-GLM_decision_mat <- matrix(FALSE, nrow=dimension,
-                           ncol=dimension)
+simulated_data <- readRDS(file.path(data_folder,
+                                   sprintf("simulated_data_null_%d.rds", replicate)))
 
-for (j in 1:(dimension-1)){
-  GLM_decision_mat[j, (j+1):dimension] <- GLM_decision_wide[j, (j+1):dimension] %>%
-    as.numeric()
-}
-GLM_decision_mat <- GLM_decision_mat + t(GLM_decision_mat)
-# plotMyMatrix(GLM_decision_mat, dimLabels =c('Taxa'))
+## set threshold at 0.05
+GLM_result$link05 <- GLM_result$pval < 0.05
+GLM_decision_mat_high <- adjmat_generation(data_folder, GLM_folder, id=replicate, threshold=0.05)
+## set threshold at 0.01
+GLM_result$link01 <- GLM_result$pval < 0.01
+GLM_decision_mat_low <- adjmat_generation(data_folder, GLM_folder, id=replicate, threshold=0.01)
+
+
+# visualize the histograms of degrees
+degrees_high <- colMeans(GLM_decision_mat_high)
+degrees_low <- colMeans(GLM_decision_mat_low)
+degrees_df <- data.frame(Degrees=c(degrees_high, degrees_low),
+                         Cutoff = rep(c("Cutoff=0.05", "Cutoff=0.01"), each=300))
+degrees_df_nonzero <- degrees_df %>% filter(Degrees > 0)
+ggplot(degrees_df_nonzero %>% filter(Cutoff == "Cutoff=0.05"), aes(x=Degrees)) +
+  geom_histogram(binwidth=0.02, color="black", fill="white")+
+  xlab("Degrees/300 (Only Non-zero degrees included)")+ylab("Count")
+
+
+# visualize the adjacency matrix
+name_order_1 <- sprintf("Taxon%d", seq(1, 300))
+name_order_2 <- sprintf("Taxon%d", seq(300, 1))
+
+
+GLM_result_copy_1 <- GLM_result %>% select(T1, T2, link05, link01) %>%
+  rename(from=T1, to=T2) %>% mutate(to=factor(to, levels=name_order_1),
+                                    from=factor(from, levels=name_order_2))
+
+
+GLM_result_copy_2 <- GLM_result_copy_1
+GLM_result_copy_2$from <- GLM_result_copy_1$to
+GLM_result_copy_2$to <- GLM_result_copy_1$from
+GLM_result_copy_3 <- GLM_result_copy_2
+GLM_result_copy_3$to <- GLM_result_copy_3$from
+GLM_result_copy_3$link05 <- FALSE
+GLM_result_copy_3$link01 <- FALSE
+GLM_result_copy <- rbind(GLM_result_copy_1, GLM_result_copy_2, GLM_result_copy_3)
+
+
+ggplot(GLM_result_copy, aes(x = from, y = to, fill = link05)) +
+  geom_raster() +
+  theme_bw() + scale_fill_manual(values = c("white", "black"))+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank(),
+        legend.position="none")
+
+ggplot(GLM_result_copy, aes(x = from, y = to, fill = link01)) +
+  geom_raster() +
+  theme_bw() + scale_fill_manual(values = c("white", "black"))+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank(),
+        legend.position="none")
+
+
 
 
 # fit SBM model
-init_membership_degree <- cap_membership(degree_init(GLM_decision_mat))
-init_membership_sc <- spectral_clustering(GLM_decision_mat)
-init_membership_flat <- flat_init(GLM_decision_mat)
-result_degree <- complete_EM(GLM_decision_mat, init_membership_degree)
-result_sc <- complete_EM(GLM_decision_mat, init_membership_sc)
-result_flat <- complete_EM(GLM_decision_mat, init_membership_flat)
-result_pred_prob_degree <- result_degree$membership
-result_pred_prob_sc <- result_sc$membership
+init_membership_degree <- cap_membership(degree_init(GLM_decision_mat_high))
+init_membership_sc <- spectral_clustering(GLM_decision_mat_high)
+init_membership_flat <- flat_init(GLM_decision_mat_high)
+
+
+result_degree <- complete_EM(GLM_decision_mat_high, init_membership_degree)
+result_sc <- complete_EM(GLM_decision_mat_high, init_membership_sc)
+result_flat <- complete_EM(GLM_decision_mat_high, init_membership_flat)
+
+
+# plot trajectories
+membership_trajectories_summary <- function(VI_result){
+  num_iter <- length(VI_result$membership)
+  num_taxa <- nrow(VI_result$membership[[1]])
+  membership_trajectories <- data.frame(Iter = rep(1:num_iter, each=num_taxa),
+                                               Taxon = rep(1:num_taxa, num_iter),
+                                               Membership = 0)
+  membership_trajectories$Membership <- do.call(c, lapply(VI_result$membership,
+                                                                 function(element) element[, 1]))
+  return(membership_trajectories)
+}
+
+
+theta_trajectories_summary <- function(VI_result){
+  num_iter <- length(VI_result$theta)
+  num_parameters <- 3
+  theta_trajectories <- data.frame(Iter = rep(1:num_iter, each=num_parameters),
+                                        Block = rep(c("Diag1", "OffDiag", "Diag2"), num_iter),
+                                        Probability = 0)
+  theta_trajectories$Probability <- do.call(c, lapply(VI_result$theta,
+                                                      function(element) element[c(1,3,4)]))
+  return(theta_trajectories)
+}
+
+
+membership_trajectories_degree <- membership_trajectories_summary(result_degree)
+theta_trajectories_degree <- theta_trajectories_summary(result_degree)
+membership_trajectories_sc <- membership_trajectories_summary(result_sc)
+theta_trajectories_sc <- theta_trajectories_summary(result_sc)
+
+membership_plot_degree <- ggplot(membership_trajectories_degree, aes(x=Iter, y=Membership, group=Taxon)) +
+  geom_point(size=1.2, alpha=0.6) +
+  geom_line(size=0.5, alpha=0.1) +
+  theme(legend.position="none")
+
+theta_plot_degree <- ggplot(theta_trajectories_degree, aes(x=Iter, y=Probability, group=Block))+
+  geom_point(size=1.2, aes(color=Block), alpha=0.8) +
+  geom_line(size=0.5, aes(color=Block), alpha=0.4)
+
+membership_plot_sc <- ggplot(membership_trajectories_sc, aes(x=Iter, y=Membership, group=Taxon)) +
+  geom_point(size=1.2, alpha=0.6) +
+  geom_line(size=0.5, alpha=0.1) +
+  theme(legend.position="none")
+
+theta_plot_sc <- ggplot(theta_trajectories_sc, aes(x=Iter, y=Probability, group=Block))+
+  geom_point(size=1.2, aes(color=Block), alpha=0.8) +
+  geom_line(size=0.5, aes(color=Block), alpha=0.4)
+
+
+library(cowplot)
+
+plot_grid(membership_plot_degree, theta_plot_degree, membership_plot_sc, theta_plot_sc,
+          nrow=2, rel_widths = c(1, 1.4), labels="AUTO")
+
 
 # simplest SBM model with binary entries
-taxaSBM <- BM_bernoulli(membership_type="SBM_sym", adj=GLM_decision_mat,
+taxaSBM <- BM_bernoulli(membership_type="SBM_sym", adj=GLM_decision_mat_high,
                         explore_min=2, explore_max=2, plotting='', verbosity=6)
 taxaSBM$estimate()
 
 result_pred_prob_package <- taxaSBM$memberships[[2]]$Z
-difference <- result_pred_prob_sc - result_pred_prob_package
+difference <- 1 - result_pred_prob_sc - result_pred_prob_package
 max(abs(difference))
 
 ## make the decision
