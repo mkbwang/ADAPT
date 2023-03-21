@@ -2,7 +2,7 @@ library(phyloseq)
 
 
 abn.tab.gen_simple <- function(n.taxa=60, n.samp.grp1=50, n.samp.grp2=50, abn=200,
-                               prop.diff=0.5, abn.seed=2021, obs.seed=2022){
+                               prop.diff=0.5, abn.seed=2021, obs.seed=2022, first_taxon=FALSE){
   # Total number of samples
   n.samp=n.samp.grp1+n.samp.grp2
   set.seed(abn.seed)
@@ -13,12 +13,16 @@ abn.tab.gen_simple <- function(n.taxa=60, n.samp.grp1=50, n.samp.grp2=50, abn=20
   # Which taxa are differentially abundant
   diff.ind=rep(0, n.taxa)
   # Differentially abundant taxa
-  diff.pos=sample(c(1:n.taxa), floor(n.taxa*prop.diff), replace=FALSE)
-  diff.ind[diff.pos]=1
+  diff.pos=sample(c(2:n.taxa), floor(n.taxa*prop.diff), replace=FALSE)
 
+  if (first_taxon & !(1 %in% diff.pos)){# deliberately set the first taxon to be DA
+    diff.pos <- c(1, diff.pos)
+  }
+
+  diff.ind[diff.pos]=1
   # Effect size
   effect.size=rep(1, n.taxa)
-  effect.size[diff.pos]=rexp(n=length(diff.pos), rate=1) + 1
+  effect.size[diff.pos]=rexp(n=length(diff.pos), rate=0.7) + 1
   names(effect.size)=paste0("taxon", seq(n.taxa))
 
   # Mean absolute abundance in the ecosystem
