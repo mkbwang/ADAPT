@@ -33,8 +33,6 @@ meta_data2$age=signif(as.numeric(meta_data2$age), digits = 2)
 meta_data2$bmi=signif(as.numeric(meta_data2$bmi), digits = 2)
 meta_data2$breast.fed[which(meta_data2$breast.fed=="NA1")]="NA"
 
-write.csv(meta_data2, "real_data/Yatsunenko_data/cleaned_metadata.csv", row.names=FALSE)
-
 # read in taxonomy
 taxonomy=read_tsv("real_data/Yatsunenko_data/global_gut_taxonomy.txt")
 taxonomy=taxonomy%>%rowwise()%>%
@@ -51,15 +49,19 @@ non_info_pos=grep("\\p__\\b", phylum_table$OTU_ID) # Exact match
 phylum_table=phylum_table[-non_info_pos, ]
 phylum_table=as.data.frame(phylum_table)
 
-write.csv(phylum_table,
-          "real_data/Yatsunenko_data/phylum_table.csv",
-          row.names=FALSE)
 
 rownames(phylum_table) <- phylum_table$OTU_ID
 phylum_table <- phylum_table[, -1]
+
 meta_data <- as.data.frame(meta_data)
+# there is an error in metadata
+meta_data$country[47] <- "VEN"
 row.names(meta_data) <- meta_data$Sample.ID
 meta_data$Sample.ID <- NULL
+
+write.csv(phylum_table,
+          "real_data/Yatsunenko_data/phylum_table.csv")
+write.csv(meta_data, "real_data/Yatsunenko_data/cleaned_metadata.csv")
 
 
 data_subset <- function(otu_count, metadata, select_country, agegroup="infant"){
@@ -71,8 +73,8 @@ data_subset <- function(otu_count, metadata, select_country, agegroup="infant"){
   }
 
   otu_count_subset <- otu_count[, row.names(metadata_subset)]
-  prevalence <- rowMeans(otu_count_subset == 0)
-  selected_taxa <- names(prevalence[prevalence < 0.9])
+  prevalence <- rowMeans(otu_count_subset != 0)
+  selected_taxa <- names(prevalence[prevalence > 0.2])
   otu_count_subset <- otu_count_subset[selected_taxa, ]
 
   phy_obj <- phyloseq(otu_table(otu_count_subset, taxa_are_rows=TRUE),
@@ -94,7 +96,6 @@ US_VEN_adult <- data_subset(phylum_table, meta_data, c("US", "VEN"), "adult")
 write.csv(US_VEN_adult$metadata_subset, 'real_data/Yatsunenko_data/US_Venezuela/US_VEN_adult_metadata.csv')
 write.csv(US_VEN_adult$otu_count_subset, 'real_data/Yatsunenko_data/US_Venezuela/US_VEN_adult_OTU.csv')
 saveRDS(US_VEN_adult$phy_obj, file='real_data/Yatsunenko_data/US_Venezuela/US_VEN_adult_phyloseq.rds')
-
 
 
 # US vs Malawi
@@ -119,6 +120,5 @@ MA_VEN_adult <- data_subset(phylum_table, meta_data, c("VEN", "MA"), "adult")
 write.csv(MA_VEN_adult$metadata_subset, 'real_data/Yatsunenko_data/Malawi_Venezuela/MA_VEN_adult_metadata.csv')
 write.csv(MA_VEN_adult$otu_count_subset, 'real_data/Yatsunenko_data/Malawi_Venezuela/MA_VEN_adult_OTU.csv')
 saveRDS(MA_VEN_adult$phy_obj, file='real_data/Yatsunenko_data/Malawi_Venezuela/MA_VEN_adult_phyloseq.rds')
-
 
 
