@@ -55,20 +55,70 @@ write.csv(phylum_table,
           "real_data/Yatsunenko_data/phylum_table.csv",
           row.names=FALSE)
 
-# summarize metadata for two age groups: 0-2 and 18-40
-meta_data_infant_US_VEN = meta_data2%>%filter(country%in%c("US", "VEN"), age<=2)
-# meta_data_18_40 = meta_data2%>%filter(age>=18, age<=40)
+rownames(phylum_table) <- phylum_table$OTU_ID
+phylum_table <- phylum_table[, -1]
+meta_data <- as.data.frame(meta_data)
+row.names(meta_data) <- meta_data$Sample.ID
+meta_data$Sample.ID <- NULL
 
 
-obs.abn <- phylum_table
-rownames(obs.abn)=obs.abn$OTU_ID
-obs.abn=obs.abn[, -1]
+data_subset <- function(otu_count, metadata, select_country, agegroup="infant"){
 
-prevalence <- rowMeans(obs.abn == 0)
-selected_taxa <- names(prevalence[prevalence < 0.9])
+  if (agegroup == "infant"){
+    metadata_subset <- metadata%>%filter(country%in%select_country, age<=2)
+  } else{
+    metadata_subset <- metadata%>%filter(country%in%select_country, age>=18, age<=40)
+  }
 
-# load functions for ANCOMBC
-source('ANCOM_ANCOMBC/ancombc.R')
+  otu_count_subset <- otu_count[, row.names(metadata_subset)]
+  prevalence <- rowMeans(otu_count_subset == 0)
+  selected_taxa <- names(prevalence[prevalence < 0.9])
+  otu_count_subset <- otu_count_subset[selected_taxa, ]
+
+  phy_obj <- phyloseq(otu_table(otu_count_subset, taxa_are_rows=TRUE),
+                      sample_data(metadata_subset))
+  list(metadata_subset = metadata_subset,
+       otu_count_subset = otu_count_subset,
+       phy_obj = phy_obj)
+
+}
+
+# US vs Venezuela
+US_VEN_infant <- data_subset(phylum_table, meta_data, c("US", "VEN"), "infant")
+write.csv(US_VEN_infant$metadata_subset, 'real_data/Yatsunenko_data/US_Venezuela/US_VEN_infant_metadata.csv')
+write.csv(US_VEN_infant$otu_count_subset, 'real_data/Yatsunenko_data/US_Venezuela/US_VEN_infant_OTU.csv')
+saveRDS(US_VEN_infant$phy_obj, file='real_data/Yatsunenko_data/US_Venezuela/US_VEN_infant_phyloseq.rds')
+
+
+US_VEN_adult <- data_subset(phylum_table, meta_data, c("US", "VEN"), "adult")
+write.csv(US_VEN_adult$metadata_subset, 'real_data/Yatsunenko_data/US_Venezuela/US_VEN_adult_metadata.csv')
+write.csv(US_VEN_adult$otu_count_subset, 'real_data/Yatsunenko_data/US_Venezuela/US_VEN_adult_OTU.csv')
+saveRDS(US_VEN_adult$phy_obj, file='real_data/Yatsunenko_data/US_Venezuela/US_VEN_adult_phyloseq.rds')
+
+
+
+# US vs Malawi
+US_MA_infant <- data_subset(phylum_table, meta_data, c("US", "MA"), "infant")
+write.csv(US_MA_infant$metadata_subset, 'real_data/Yatsunenko_data/US_Malawi/US_MA_infant_metadata.csv')
+write.csv(US_MA_infant$otu_count_subset, 'real_data/Yatsunenko_data/US_Malawi/US_MA_infant_OTU.csv')
+saveRDS(US_MA_infant$phy_obj, file='real_data/Yatsunenko_data/US_Malawi/US_MA_infant_phyloseq.rds')
+
+US_MA_adult <- data_subset(phylum_table, meta_data, c("US", "MA"), "adult")
+write.csv(US_MA_adult$metadata_subset, 'real_data/Yatsunenko_data/US_Malawi/US_MA_adult_metadata.csv')
+write.csv(US_MA_adult$otu_count_subset, 'real_data/Yatsunenko_data/US_Malawi/US_MA_adult_OTU.csv')
+saveRDS(US_MA_adult$phy_obj, file='real_data/Yatsunenko_data/US_Malawi/US_MA_adult_phyloseq.rds')
+
+
+# Malawi vs Venezuela
+MA_VEN_infant <- data_subset(phylum_table, meta_data, c("VEN", "MA"), "infant")
+write.csv(MA_VEN_infant$metadata_subset, 'real_data/Yatsunenko_data/Malawi_Venezuela/MA_VEN_infant_metadata.csv')
+write.csv(MA_VEN_infant$otu_count_subset, 'real_data/Yatsunenko_data/Malawi_Venezuela/MA_VEN_infant_OTU.csv')
+saveRDS(MA_VEN_infant$phy_obj, file='real_data/Yatsunenko_data/Malawi_Venezuela/MA_VEN_infant_phyloseq.rds')
+
+MA_VEN_adult <- data_subset(phylum_table, meta_data, c("VEN", "MA"), "adult")
+write.csv(MA_VEN_adult$metadata_subset, 'real_data/Yatsunenko_data/Malawi_Venezuela/MA_VEN_adult_metadata.csv')
+write.csv(MA_VEN_adult$otu_count_subset, 'real_data/Yatsunenko_data/Malawi_Venezuela/MA_VEN_adult_OTU.csv')
+saveRDS(MA_VEN_adult$phy_obj, file='real_data/Yatsunenko_data/Malawi_Venezuela/MA_VEN_adult_phyloseq.rds')
 
 
 
