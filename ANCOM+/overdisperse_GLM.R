@@ -89,7 +89,8 @@ pairwise_GLM <- function(count_data, metadata, covar){
 
   outcome <- foreach(j=1:nrow(glmdisp_result), .combine=rbind,
                      .packages="dplyr", .inorder=FALSE,
-                     .export=c("glm.binomial.disp")) %dopar% {
+                     .export=c("glm.binomial.disp"),
+                     .errorhandling="remove") %dopar% {
                        result <- list(ID=j, effect=NA, SE=NA, pval=NA)
                        t1 <- as.character(glmdisp_result$T1[j])
                        t2 <- as.character(glmdisp_result$T2[j])

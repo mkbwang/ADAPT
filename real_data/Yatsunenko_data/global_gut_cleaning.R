@@ -121,4 +121,3 @@ write.csv(MA_VEN_adult$metadata_subset, 'real_data/Yatsunenko_data/Malawi_Venezu
 write.csv(MA_VEN_adult$otu_count_subset, 'real_data/Yatsunenko_data/Malawi_Venezuela/MA_VEN_adult_OTU.csv')
 saveRDS(MA_VEN_adult$phy_obj, file='real_data/Yatsunenko_data/Malawi_Venezuela/MA_VEN_adult_phyloseq.rds')
 
-

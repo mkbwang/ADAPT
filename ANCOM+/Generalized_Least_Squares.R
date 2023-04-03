@@ -1,6 +1,6 @@
 ## ----setup, include=FALSE----------------------------------------------------------
 library(Matrix)
-
+library(lme4)
 
 # Woodbury inverse
 woodbury_inverse <- function(diagA, U_mat, diagC, V_mat){
@@ -29,6 +29,58 @@ symmetric_pseudo_inverse <- function(symmat, rank){
   inv_mat <- eigen_vectors %*% diag(inv_eig_values) %*% t(eigen_vectors)
   return(inv_mat)
 }
+
+
+lmer_function <- function(count_data, glm_result, reference=c("mean", "median")){
+
+  num_taxa <- nrow(count_data)
+  taxa_names <- rownames(count_data)
+
+  # get the Z scores of all the logistic regressions
+  Z_score <- glm_result$effect / glm_result$SE
+  Z_score <- c(0, Z_score)
+
+  # design matrix, contains one row for anchoring tau_1 at zero
+  allpairs <- combn(seq(1, num_taxa), m=2)
+  num_pair <- ncol(allpairs)
+  design_matrix_rowid <- c(1, rep(seq(2, num_pair+1), 2))
+  design_matrix_colid <- c(1, allpairs[1,], allpairs[2,])
+  entry_vals <- c(1, rep(c(1, -1), each=num_pair))
+  design_matrix <- sparseMatrix(i=design_matrix_rowid, j=design_matrix_colid,
+                                x=entry_vals) |> as.matrix()
+
+  data_df <- as.data.frame(design_matrix)
+  colnames(data_df) <- taxa_names
+  data_df$Z <- Z_score
+  data_df$T1 <- c(glm_result$T1[1], glm_result$T1) |> as.factor()
+
+  formula_str <- sprintf("Z ~ %s - 1 + (1|T1) ",
+                         paste(taxa_names, collapse="+"))
+  regression_formula <- as.formula(formula_str)
+  model_fitting <- lmer(regression_formula, data=data_df)
+  model_summary <- summary(model_fitting)
+  tau_hat <- model_summary$coefficients[, 1]
+  median_tau_hat <- median(tau_hat)
+  mean_tau_hat <- mean(tau_hat)
+  if (reference == "mean"){
+  shifted_tau_hat <- tau_hat - mean_tau_hat
+  } else{
+   shifted_tau_hat <- tau_hat - median_tau_hat
+  }
+  stderror_tau <- model_summary$coefficients[, 2]
+  tau_test_statistic <- shifted_tau_hat / stderror_tau
+  pval <- pnorm(-abs(tau_test_statistic)) * 2
+  pval_adjusted <- p.adjust(pval, method="BH")
+
+  result <- data.frame(Taxa = taxa_names,
+                      tau_hat = shifted_tau_hat,
+                      stderror_tau = stderror_tau,
+                      tau_test_statistic=tau_test_statistic,
+                      Pval=pval,
+                      DA=pval < 0.05)
+  return(list(result, model_summary))
+}
+
 
 
 # generalized least square
