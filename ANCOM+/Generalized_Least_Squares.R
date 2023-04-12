@@ -31,7 +31,7 @@ symmetric_pseudo_inverse <- function(symmat, rank){
 }
 
 
-lmer_function <- function(count_data, glm_result, reference=c("mean", "median")){
+lmer_function <- function(count_data, glm_result){
 
   num_taxa <- nrow(count_data)
   taxa_names <- rownames(count_data)
@@ -84,81 +84,83 @@ lmer_function <- function(count_data, glm_result, reference=c("mean", "median"))
 
 
 # generalized least square
-generalized_ls <- function(count_data, metadata, glm_result, reference=c("mean", "median"), corr=TRUE){
-  num_taxa <- nrow(count_data)
+generalized_ls <- function(count_data, glm_result, shrinkid=c()){
 
-  # get the Z scores of all the logistic regressions
-  Z_score <- glm_result$effect / glm_result$SE
+  num_taxa <- nrow(count_data)
+  num_included_taxa <- length(num_taxa) - length(shrinkid)
+  taxa_names <- rownames(count_data)
+  if (length(shrinkid) > 0){
+    taxa_names <- taxa_names[-shrinkid]
+  }
+  # some logistic regression may fail due to quasi separation
+  success_pairs <- !is.na(glm_result$SE)
+  estimated_effect <- glm_result$effect
+  estimated_variance <- (glm_result$SE)^2
 
   # design matrix
   allpairs <- combn(seq(1, num_taxa), m=2)
+
+  # # some glm results need to be left out because some columns in the design matrix are thrown out
+  # filtervec <- rep(FALSE, length(glm_result$effect))
+  # if (length(shrinkid) > 0){
+  #   filtervec <- (allpairs[1, ] %in% shrinkid) & (allpairs[2, ] %in% shrinkid)
+  # }
+
+  # glm results to be included
+  # included_pairs <- success_pairs & !filtervec
+  #
+  # # glm results to be excluded from the least squares regression
+  # excluded_pairs <- success_pairs & filtervec
+
   num_pair <- ncol(allpairs)
   design_matrix_rowid <- rep(seq(1, num_pair), 2)
-  design_matrix_colid <- c(allpairs[1,], allpairs[2,])
+  design_matrix_colid <- c(allpairs[1, ], allpairs[2, ])
   entry_vals <- rep(c(1, -1), each=num_pair)
   design_matrix <- sparseMatrix(i=design_matrix_rowid, j=design_matrix_colid,
                                 x=entry_vals)
 
+  if (length(shrinkid) > 0){
+    design_matrix <- design_matrix[, -shrinkid]
+  }
+  design_matrix <- design_matrix[success_pairs, drop=FALSE]
+
   dm_rank <- rankMatrix(design_matrix, method='qr')[[1]]
 
-  nonzero_proportion <- rowMeans(count_data != 0)
-  taxa_reffect_var <- rep(1, num_taxa) # random effect variance
-  residual_var <- rep(1, num_pair) # residual variance
-
   # covariance matrix inverse(without the unknown sigma^2 factor)
-  V_inv <- woodbury_inverse(residual_var, design_matrix, taxa_reffect_var,
-                            t(design_matrix))
+  V_inv <- sparseMatrix(i=seq(1, sum(success_pairs)), j=seq(1, sum(success_pairs)),
+                        x=0.2 / estimated_variance[success_pairs])
 
   XtVX <- t(design_matrix) %*% V_inv %*% design_matrix
   XtVX <- as.matrix(XtVX)
   XtVX_inv <- symmetric_pseudo_inverse(XtVX, rank=dm_rank)
 
-  XtX <- t(design_matrix) %*% design_matrix
-  XtX <- as.matrix(XtX)
-  XtX_inv <- symmetric_pseudo_inverse(XtX, rank=dm_rank)
 
-  if (corr){
-    # estimate tau
-    tau_hat <- XtVX_inv %*% t(design_matrix) %*% V_inv %*% Z_score
-    tau_hat <- as.vector(tau_hat)
-    # residual
-    resid <- Z_score - design_matrix %*% tau_hat
-    # sigma^2 estimate (MLE)
-    sigma2_hat <- t(resid) %*% V_inv %*% resid / nrow(resid)
-    # estimated covariance of tau
-    covar_tau <- drop(sigma2_hat) * XtVX_inv
-    stderror_tau <- sqrt(diag(covar_tau))
-  } else{
-    # estimate tau
-    tau_hat <- XtX_inv %*% t(design_matrix) %*% Z_score
-    tau_hat <- as.vector(tau_hat)
-    # residual
-    resid <- Z_score - design_matrix %*% tau_hat
-    # sigma^2 estimate (MLE)
-    sigma2_hat <- t(resid)  %*% resid / nrow(resid)
-    # estimated covariance of tau
-    covar_tau <- drop(sigma2_hat) * XtX_inv
-    stderror_tau <- sqrt(diag(covar_tau))
-  }
+  # estimate tau
+  tau_hat <- XtVX_inv %*% t(design_matrix) %*% V_inv %*% estimated_effect[success_pairs]
+  tau_hat <- as.vector(tau_hat)
+  # residual
+  resid <- estimated_effect[success_pairs] - design_matrix %*% tau_hat
+  # sigma^2 estimate (MLE)
+  # sigma2_hat <- t(resid) %*% V_inv %*% resid / nrow(resid)
+  # estimated covariance of tau
+  # covar_tau <- drop(sigma2_hat) * XtVX_inv
+  stderror_tau <- sqrt(diag(XtVX_inv))
 
-  if (reference == "median"){
-    shift <- median(tau_hat) # shift the estimated taus so that the median is zero
-    shifted_tau_hat <- tau_hat - shift
-  } else{ # if mean, no need to shift
-    shifted_tau_hat <- tau_hat
-  }
-
-  test_statistic <- as.vector(shifted_tau_hat / stderror_tau)
+  test_statistic <- as.vector(tau_hat / stderror_tau)
   pval <- 2 * pnorm(-abs(test_statistic))
-
-  adjusted_pval <- p.adjust(pval, method="BH")
-  result <- data.frame(Taxa_name = rownames(count_data),
-                       tau_hat = shifted_tau_hat,
+  result <- data.frame(Taxa_name = taxa_names,
+                       tau_hat = tau_hat,
                        sderror = stderror_tau,
-                       pval_raw = pval,
-                       pval_adjust = adjusted_pval,
-                       DA = adjusted_pval < 0.05)
+                       teststat = test_statistic,
+                       pval_raw = pval)
 
-  return(result)
+  # BIC calculation
+  weighted_RSS <- drop(t(resid) %*% V_inv %*% resid)
+  ## BIC of logistic regression results included in the regression
+  BIC_value <- sum(success_pairs) * log(weighted_RSS) +
+    sum(num_included_taxa) * log(sum(success_pairs))
+
+  conclusion <- list(fitted_parameters=result, BIC_score = BIC_value, Residuals = resid)
+  return(conclusion)
 }
 
