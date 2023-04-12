@@ -122,8 +122,8 @@ generalized_ls <- function(count_data, glm_result, shrinkid=c()){
   if (length(shrinkid) > 0){
     design_matrix <- design_matrix[, -shrinkid]
   }
-  design_matrix <- design_matrix[success_pairs, drop=FALSE]
-
+  design_matrix <- design_matrix[success_pairs, ]
+  # print(dim(design_matrix))
   dm_rank <- rankMatrix(design_matrix, method='qr')[[1]]
 
   # covariance matrix inverse(without the unknown sigma^2 factor)
@@ -141,10 +141,10 @@ generalized_ls <- function(count_data, glm_result, shrinkid=c()){
   # residual
   resid <- estimated_effect[success_pairs] - design_matrix %*% tau_hat
   # sigma^2 estimate (MLE)
-  # sigma2_hat <- t(resid) %*% V_inv %*% resid / nrow(resid)
+  sigma2_hat <- t(resid) %*% V_inv %*% resid / nrow(resid)
   # estimated covariance of tau
-  # covar_tau <- drop(sigma2_hat) * XtVX_inv
-  stderror_tau <- sqrt(diag(XtVX_inv))
+  covar_tau <- drop(sigma2_hat) * XtVX_inv
+  stderror_tau <- sqrt(diag(covar_tau))
 
   test_statistic <- as.vector(tau_hat / stderror_tau)
   pval <- 2 * pnorm(-abs(test_statistic))
@@ -157,10 +157,10 @@ generalized_ls <- function(count_data, glm_result, shrinkid=c()){
   # BIC calculation
   weighted_RSS <- drop(t(resid) %*% V_inv %*% resid)
   ## BIC of logistic regression results included in the regression
-  BIC_value <- sum(success_pairs) * log(weighted_RSS) +
-    sum(num_included_taxa) * log(sum(success_pairs))
+  AIC_value <- sum(success_pairs) * log(weighted_RSS) +
+    sum(num_included_taxa) * 2
 
-  conclusion <- list(fitted_parameters=result, BIC_score = BIC_value, Residuals = resid)
+  conclusion <- list(fitted_parameters=result, AIC_score = AIC_value, Residuals = resid)
   return(conclusion)
 }
 
