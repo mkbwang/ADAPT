@@ -19,6 +19,9 @@ glm_result <- pairwise_GLM(count_data=otu_df,
 # glm_result <- read.csv("real_data/Crohn_Vandeputte/Crohn_GLM_perm0.csv")
 
 full_model <- generalized_ls(otu_df, glm_result)
+full_model_params <- full_model$fitted_parameters
+write.csv(full_model_params,
+          'real_data/Crohn_Vandeputte/Crohn_DiffRatio_result.csv', row.names=FALSE)
 tau_abs <- abs(full_model$fitted_parameters$tau_hat)
 teststat_abs <- abs(full_model$fitted_parameters$teststat)
 backward_selection_order <- order(teststat_abs)
