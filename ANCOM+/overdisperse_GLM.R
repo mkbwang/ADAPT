@@ -91,7 +91,7 @@ pairwise_GLM <- function(count_data, metadata, covar){
                      .packages="dplyr", .inorder=FALSE,
                      .export=c("glm.binomial.disp"),
                      .errorhandling="remove") %dopar% {
-                       result <- list(ID=j, effect=NA, SE=NA, pval=NA)
+                       estimation <- list(ID=j, effect=NA, SE=NA, pval=NA, Fail=TRUE)
                        t1 <- as.character(glmdisp_result$T1[j])
                        t2 <- as.character(glmdisp_result$T2[j])
                        selected_counts <- count_data[c(t1, t2),] %>%
@@ -104,17 +104,29 @@ pairwise_GLM <- function(count_data, metadata, covar){
                        selected_counts <- selected_counts %>% filter(totcounts > 0)
 
                        glm_formula <- sprintf("cbind(T1, T2) ~ %s", covar) |> as.formula()
-                       rawglm <- glm(glm_formula, family=binomial(link = "logit"),
-                                     data=selected_counts)
+                       result <- tryCatch(
+                         {
+                           rawglm <- glm(glm_formula, family=binomial(link = "logit"),
+                                         data=selected_counts)
+                           corrected_glm <- glm.binomial.disp(rawglm, verbose = FALSE) %>%
+                             summary()
+                           corrected_effect <- corrected_glm$coefficients[2, 1]
+                           corrected_SE <- corrected_glm$coefficients[2, 2]
+                           corrected_pval <- corrected_glm$coefficients[2, 4]
+                           estimation <- list(ID=j, effect=corrected_effect,
+                                              SE=corrected_SE,
+                                              pval=corrected_pval,
+                                              Fail=FALSE)
 
-                       corrected_glm <- glm.binomial.disp(rawglm, verbose = FALSE) %>%
-                         summary()
-
-                       result$effect <- corrected_glm$coefficients[2, 1]
-                       result$SE <- corrected_glm$coefficients[2, 2]
-                       result$pval <- corrected_glm$coefficients[2, 4]
-
-                       return(as.data.frame(result))
+                         },
+                         error=function(cond){
+                           estimation <- list(ID=j, effect=NA, SE=NA, pval=NA, Fail=TRUE)
+                         },
+                         warning=function(cond){
+                           estimation <- list(ID=j, effect=NA, SE=NA, pval=NA, Fail=TRUE)
+                         }
+                       )
+                       return(as.data.frame(estimation))
                      }
   glmdisp_result$effect[outcome$ID] <- outcome$effect
   glmdisp_result$SE[outcome$ID] <- outcome$SE
