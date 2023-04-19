@@ -1,2 +1,3 @@
-# DiffRatio
-Differential Ratio Analysis for microbiome relative abundance data 
+# POLDA
+
+POLDA: Pooling Overdispersed Logistic Regressions for Microbiome Differential Abundance Analysis
