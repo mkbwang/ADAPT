@@ -1,6 +1,6 @@
 
-source('ANCOM+/overdisperse_GLM.R')
-source('ANCOM+/Reference_Selection.R')
+source('POLDA/overdisperse_GLM.R')
+source('POLDA/Reference_Selection.R')
 
 library(ACAT)
 cauchy_combination <- function(pvalvec){
@@ -9,14 +9,32 @@ cauchy_combination <- function(pvalvec){
 }
 
 
-polda <- function(otu_table, metadata, covar){
+polda <- function(otu_table, metadata, covar, covartype=c("categorical", "numerical")){
 
+  covartype <- match.arg(covartype)
   taxa_names <- row.names(otu_table) # assume taxa are rows
+  struct_zero_taxa <- c()
+  if (covartype == "categorical"){
+    # get rid of taxa with structural zeros
+    uniq_categories <- unique(metadata[, covar])
+    numcategories <- length(uniq_categories)
+    otu_iszero <- otu_table == 0
+    otu_structzero <- matrix(FALSE, nrow=nrow(otu_iszero), ncol=numcategories)
+    for (j in 1:numcategories){
+      otu_iszero_subset <- otu_iszero[, metadata[, covar] == uniq_categories[j]]
+      otu_structzero[, j] <- apply(otu_iszero_subset, 1, all)
+    }
+    is_struct_zero <- apply(otu_structzero, 1, any)
+    struct_zero_taxa <- taxa_names[is_struct_zero]
+    otu_table <- otu_table[!is_struct_zero, ]
+    taxa_names <- taxa_names[!is_struct_zero]
+  }
+
   glm_result <- pairwise_GLM(otu_table, metadata, covar) # overdispersed GLM
   reftaxa <- backward_selection(otu_table, glm_result) # reference taxa selection
 
   # Set up a matrix of Logistic Regression P Values
-  glm_pvals <- glm_result %>% select(T1, T2, pval)
+  glm_pvals <- glm_result %>% dplyr::select(T1, T2, pval)
   glm_pvals_wide <- reshape(glm_pvals, idvar="T1",
                             timevar="T2", direction="wide")
 
@@ -43,7 +61,8 @@ polda <- function(otu_table, metadata, covar){
 
   DiffTaxa <- Taxa_TBD[final_adjusted_pvals < 0.05]
 
-  result <- list(Reference_Taxa = reftaxa,
+  result <- list(Structural_zero_Taxa = struct_zero_taxa,
+                 Reference_Taxa = reftaxa,
                  DA_taxa = DiffTaxa,
                  P_Value = pval_df)
 
