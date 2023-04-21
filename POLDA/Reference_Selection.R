@@ -15,13 +15,15 @@ symmetric_pseudo_inverse <- function(symmat, rank){
 
 
 # weighted least squares
-weighted_ls <- function(design_mat, weights, Y){
-  # calculate rank just in case the design matrix is not full rank
-  dm_rank <- rankMatrix(design_mat, method='qr')[[1]]
+weighted_ls <- function(design_mat, weights, Y, rank){
   # weighted least squares
   XtWX <- t(design_mat) %*% weights %*% design_mat
   XtWX <- as.matrix(XtWX)
-  XtWX_inv <- symmetric_pseudo_inverse(XtWX, rank=dm_rank)
+  if (rank < ncol(design_mat)){
+    XtWX_inv <- symmetric_pseudo_inverse(XtWX, rank=rank)
+  } else{
+    XtWX_inv <- chol2inv(chol(XtWX))
+  }
   # estimate tau
   tau_hat <- XtWX_inv %*% t(design_mat) %*% weights %*% Y
   tau_hat <- as.vector(tau_hat)
@@ -70,14 +72,14 @@ backward_selection <- function(count_data, glm_result){
   logit_effects <- estimated_effect[success_pairs]
 
   # first fit the full model
-  current_model <- weighted_ls(design_matrix, weights, logit_effects)
+  current_model <- weighted_ls(design_matrix, weights, logit_effects, num_taxa-1)
   reference_taxa <- c()
   # backward selection
   while(TRUE){
     current_AIC <- current_model$AIC
     dropid <- current_model$drop
     design_matrix <- design_matrix[, -dropid]
-    new_model <- weighted_ls(design_matrix, weights, logit_effects)
+    new_model <- weighted_ls(design_matrix, weights, logit_effects, ncol(design_matrix))
     new_AIC <- new_model$AIC
     if (new_AIC < current_AIC){
       reference_taxa <- c(reference_taxa, taxa_names[dropid])

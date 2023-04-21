@@ -2,7 +2,7 @@ library(ggplot2)
 library(dplyr)
 library(reshape2)
 rm(list=ls())
-source('ANCOM+/POLDA.R')
+source('POLDA/POLDA.R')
 
 otu_df <- read.csv("real_data/Crohn_Vandeputte/Crohn_otu.csv",
                    row.names = 1)

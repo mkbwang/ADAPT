@@ -88,7 +88,7 @@ for (j in 1:100){
                                  covariate.type = "binary",
                                  grp.ratio = 1,
                                  covariate.eff.mean = 1,
-                                 covariate.eff.sd = 0.4,
+                                 covariate.eff.sd = 0.1,
                                  confounder.type = "none",
                                  depth.mu = 10000,
                                  depth.theta = 10)
