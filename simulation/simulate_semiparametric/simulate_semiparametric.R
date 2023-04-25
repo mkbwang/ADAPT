@@ -41,12 +41,28 @@ template_data <- template_mat@.Data
 folder <- '/home/wangmk/UM/Research/MDAWG/DiffRatio/simulation/'
 source(file.path(folder, 'simulate_semiparametric', 'utils.R'))
 
-simulated_data <- SimulateCount(template_data, nSample=100, diff_prop=0.2,
-                                covariate_type = "binary", grp_ratio=1, zinf_prop=0.1,
-                                covariate_eff_mean = 1.5, covariate_eff_sd = 0.2,
-                                depth_mu = 5000, depth_theta = 2, seed=1)
 
-filename <- sprintf("simulated_data_%d.RDS", 1)
+cores=parallelly::availableCores()
+cl <- makeCluster(cores[1]-1) #not to overload your computer
+registerDoParallel(cl)
 
-saveRDS(simulated_data, file.path(folder, 'data', 'semiparametric', filename))
+
+
+simulated_datasets <- foreach(j=1:100, .inorder=FALSE,
+                              .packages=c("gtools", "dirmult", "MASS")) %dopar% {
+
+  simulated_data <- SimulateCount(template_data, nSample=100, diff_prop=0.2,
+                                  covariate_type = "binary", grp_ratio=1, zinf_prop=0.1,
+                                  covariate_eff_mean = 1.5, covariate_eff_sd = 0.2,
+                                  depth_mu = 5000, depth_theta = 2, seed=j)
+
+
+  return(simulated_data)
+}
+
+
+for (j in 1:100){
+  filename <- sprintf("simulated_data_%d.rds", j)
+  saveRDS(simulated_datasets[[j]], file.path(folder, 'data', 'semiparametric', filename))
+}
 

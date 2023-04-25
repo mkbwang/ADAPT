@@ -17,7 +17,7 @@ SimulateCount <- function (
   covariate_eff_mean = 1, covariate_eff_sd = 0, depth_mu = 10000, depth_theta = 5,
   seed=2023
 ){
-
+  set.seed(seed)
   covariate_type <- match.arg(covariate_type)
   nOTU <- nrow(template_data)
 

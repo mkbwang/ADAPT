@@ -40,7 +40,7 @@ weighted_ls <- function(design_mat, weights, Y, rank, start=c("median", "mean"))
   test_statistic <- as.vector(tau_hat / stderror_tau)
   if (rank < ncol(design_mat) & start == "median"){
     # drop the median at first
-    drop_id <- which.min(abs(test_statistic-median(test_statistic)))
+    drop_id <- which.min(abs(tau_hat-median(tau_hat)))
   } else{
     drop_id <- which.min(abs(test_statistic))
   }

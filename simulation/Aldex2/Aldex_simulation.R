@@ -6,7 +6,7 @@ input_folder <- '/home/wangmk/UM/Research/MDAWG/DiffRatio/simulation/data/semipa
 output_folder <- '/home/wangmk/UM/Research/MDAWG/DiffRatio/simulation/ALDEx2_result/Simulation'
 
 ID <- 1
-input_fname <- sprintf('simulated_data_%d.RDS', ID)
+input_fname <- sprintf('simulated_data_%d.rds', ID)
 simulated_data <- readRDS(file.path(input_folder, input_fname))
 
 count_mat <- simulated_data$otu_tab_sim

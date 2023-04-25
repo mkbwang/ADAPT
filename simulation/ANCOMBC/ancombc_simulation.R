@@ -10,7 +10,7 @@ output_folder <- '/home/wangmk/UM/Research/MDAWG/DiffRatio/simulation/ANCOMBC_re
 ID <- 1
 
 # load simulated data
-simulated_data <- readRDS(file.path(input_folder, sprintf('simulated_data_%d.RDS', ID)))
+simulated_data <- readRDS(file.path(input_folder, sprintf('simulated_data_%d.rds', ID)))
 # count matrix
 count_mat <- otu_table(simulated_data$otu_tab_sim, taxa_are_rows = TRUE)
 # binary covariate
@@ -26,7 +26,7 @@ ancombc_result <- ancombc(test_phyloseq, formula = 'X', p_adj_method='BH',
 Q_vals <- ancombc_result$res$q_val
 truth <- simulated_data$taxa
 combined_result <- cbind(truth, Q_vals)
-table(combined_result$logfold!=0, combined_result$X<0.16)
+table(combined_result$logfold!=0, combined_result$X<0.05)
 
 library(pROC)
 
