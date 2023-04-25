@@ -136,3 +136,62 @@ pairwise_GLM <- function(count_data, metadata, covar){
   return(glmdisp_result)
 }
 
+
+
+reference_GLM <- function(count_data, metadata, covar, reftaxa){
+  alltaxa <- rownames(count_data)
+  TBDtaxa <- setdiff(alltaxa, reftaxa)
+  refcounts <- colSums(count_data[reftaxa, ]) |> as.vector()
+  TBD_counts <- count_data[TBDtaxa, ]
+  num_taxa <- length(TBDtaxa)
+  glmdisp_result <- data.frame(Taxon = TBDtaxa,
+                               effect=0,
+                               SE=0,
+                               Pval=0)
+  outcome <- foreach(j=1:nrow(glmdisp_result), .combine=rbind,
+                     .packages="dplyr", .inorder=FALSE,
+                     .export=c("glm.binomial.disp"),
+                     .errorhandling="remove") %dopar% {
+                       estimation <- list(ID=j, effect=NA, SE=NA, pval=NA, Fail=TRUE)
+                       test_taxon <- as.character(glmdisp_result$Taxon[j])
+                       selected_counts <- cbind(refcounts, TBD_counts[test_taxon, ]) |> as.data.frame()
+                       colnames(selected_counts) <- c('Reftaxa', 'Testtaxon')
+                       selected_counts[, covar] <- metadata[, covar]
+                       selected_counts$ID <- row.names(selected_counts)
+
+                       selected_counts$totcounts <- selected_counts$Reftaxa + selected_counts$Testtaxon
+                       selected_counts <- selected_counts %>% filter(totcounts > 0)
+
+                       glm_formula <- sprintf("cbind(Reftaxa, Testtaxon) ~ %s", covar) |> as.formula()
+                       result <- tryCatch(
+                         {
+                           rawglm <- glm(glm_formula, family=binomial(link = "logit"),
+                                         data=selected_counts)
+                           corrected_glm <- glm.binomial.disp(rawglm, verbose = FALSE) %>%
+                             summary()
+                           corrected_effect <- corrected_glm$coefficients[2, 1]
+                           corrected_SE <- corrected_glm$coefficients[2, 2]
+                           corrected_pval <- corrected_glm$coefficients[2, 4]
+                           estimation <- list(ID=j, effect=corrected_effect,
+                                              SE=corrected_SE,
+                                              pval=corrected_pval,
+                                              Fail=FALSE)
+
+                         },
+                         error=function(cond){
+                           estimation <- list(ID=j, effect=NA, SE=NA, pval=NA, Fail=TRUE)
+                         },
+                         warning=function(cond){
+                           estimation <- list(ID=j, effect=NA, SE=NA, pval=NA, Fail=TRUE)
+                         }
+                       )
+                       return(as.data.frame(estimation))
+                     }
+
+  glmdisp_result$effect[outcome$ID] <- outcome$effect
+  glmdisp_result$SE[outcome$ID] <- outcome$SE
+  glmdisp_result$pval[outcome$ID] <- outcome$pval
+  glmdisp_result$pval_adjust <- p.adjust(glmdisp_result$pval, method="BH")
+
+  return(glmdisp_result)
+}
