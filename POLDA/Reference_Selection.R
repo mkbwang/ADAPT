@@ -15,7 +15,9 @@ symmetric_pseudo_inverse <- function(symmat, rank){
 
 
 # weighted least squares
-weighted_ls <- function(design_mat, weights, Y, rank){
+weighted_ls <- function(design_mat, weights, Y, rank, start=c("median", "mean")){
+
+  start <- match.arg(start) # the first taxon to drop: median or mean?
   # weighted least squares
   XtWX <- t(design_mat) %*% weights %*% design_mat
   XtWX <- as.matrix(XtWX)
@@ -36,7 +38,12 @@ weighted_ls <- function(design_mat, weights, Y, rank){
   stderror_tau <- sqrt(diag(covar_tau))
   # find the next variable to drop
   test_statistic <- as.vector(tau_hat / stderror_tau)
-  drop_id <- which.min(abs(test_statistic))
+  if (rank < ncol(design_mat) & start == "median"){
+    # drop the median at first
+    drop_id <- which.min(abs(tau_hat-median(tau_hat)))
+  } else{
+    drop_id <- which.min(abs(test_statistic))
+  }
   # AIC calculation
   weighted_RSS <- drop(t(resid) %*% weights %*% resid)
   AIC_value <- nrow(design_mat) * log(weighted_RSS) +
@@ -46,8 +53,9 @@ weighted_ls <- function(design_mat, weights, Y, rank){
 
 
 # generalized least square
-backward_selection <- function(count_data, glm_result){
+backward_selection <- function(count_data, glm_result, start=c("median", "mean")){
 
+  start <- match.arg(start) # the first taxon to drop: median or mean?
   num_taxa <- nrow(count_data)
   taxa_names <- rownames(count_data)
   # some logistic regression may fail due to quasi separation
@@ -72,7 +80,7 @@ backward_selection <- function(count_data, glm_result){
   logit_effects <- estimated_effect[success_pairs]
 
   # first fit the full model
-  current_model <- weighted_ls(design_matrix, weights, logit_effects, num_taxa-1)
+  current_model <- weighted_ls(design_matrix, weights, logit_effects, num_taxa-1, start)
   reference_taxa <- c()
   # backward selection
   while(TRUE){
