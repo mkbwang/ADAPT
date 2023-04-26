@@ -1,10 +1,11 @@
 rm(list=ls())
 
-input_folder <- '/home/wangmk/UM/Research/MDAWG/DiffRatio/simulation/data/semiparametric'
+input_folder <- '/home/wangmk/MDAWG/POLDA/simulation/data'
+output_folder <- '/home/wangmk/MDAWG/POLDA/simulation/POLDA'
 
-source("POLDA/POLDA.R")
+source("/home/wangmk/MDAWG/POLDA/POLDA/POLDA.R")
 
-ID <- 1
+ID <- as.integer(Sys.getenv('SLURM_ARRAY_TASK_ID'))
 input_fname <- sprintf('simulated_data_%d.rds', ID)
 simulated_data <- readRDS(file.path(input_folder, input_fname))
 
@@ -12,23 +13,17 @@ count_mat <- simulated_data$otu_tab_sim
 covariate <- simulated_data$metadata
 truth <- simulated_data$taxa
 
-start <- proc.time()
-pairglm_result <- pairwise_GLM(count_mat, covariate, "X")
-end <- proc.time()
+result <- polda(count_mat, covariate, 'X', covartype="categorical",
+                startdrop="median")
 
-reftaxa <- backward_selection(count_mat, pairglm_result, start="median")
-
-result <- reference_GLM(count_mat, covariate, "X", reftaxa)
 #truth_subset <- truth %>% filter(!Taxa %in% reftaxa)
 truth$Taxon <- rownames(truth)
-combined_result <- truth %>% left_join(result, by="Taxon")
-combined_result$pval_adjust[is.na(combined_result$pval_adjust)] <- 1
-table(combined_result$logfold!=0, combined_result$pval_adjust<0.05)
+pval_df <- result$P_Value
+performance <- truth %>% left_join(pval_df, by="Taxon")
+performance$RefTaxa <- FALSE
+performance$RefTaxa[performance$Taxon %in% result$Reference_Taxa] <- TRUE
 
-library(pROC)
-
-roc_obj <- roc(combined_result$logfold != 0, 1-combined_result$pval_adjust)
-roc_obj$auc
-
-
+write.csv(performance, 
+          file.path(output_folder, sprintf('polda_simulation_result_%d.csv', ID)),
+          row.names=FALSE)
 
