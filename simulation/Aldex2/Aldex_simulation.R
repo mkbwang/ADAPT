@@ -2,8 +2,8 @@ rm(list=ls())
 library(dplyr)
 library(ALDEx2)
 
-input_folder <- '/home/wangmk/UM/Research/MDAWG/DiffRatio/simulation/data/semiparametric'
-output_folder <- '/home/wangmk/UM/Research/MDAWG/DiffRatio/simulation/ALDEx2_result/Simulation'
+input_folder <- '/home/wangmk/UM/Research/MDAWG/POLDA/simulation/data/semiparametric'
+output_folder <- '/home/wangmk/UM/Research/MDAWG/POLDA/simulation/ALDEx2_result/Simulation'
 
 ID <- 1
 input_fname <- sprintf('simulated_data_%d.rds', ID)

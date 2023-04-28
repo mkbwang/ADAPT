@@ -2,12 +2,6 @@
 source('POLDA/overdisperse_GLM.R')
 source('POLDA/Reference_Selection.R')
 
-library(ACAT)
-cauchy_combination <- function(pvalvec){
-  pvalvec <- na.omit(pvalvec)
-  return(ACAT(pvalvec))
-}
-
 
 polda <- function(otu_table, metadata, covar,
                   covartype=c("categorical", "numerical"),
