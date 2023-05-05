@@ -15,7 +15,7 @@ symmetric_pseudo_inverse <- function(symmat, rank){
 
 
 # weighted least squares
-weighted_ls <- function(design_mat, weights, Y, rank, start=c("median", "mean")){
+weighted_ls <- function(design_mat, weights, Y, rank, start=c("median", "mean", "mode")){
 
   start <- match.arg(start) # the first taxon to drop: median or mean?
   # weighted least squares
@@ -41,6 +41,10 @@ weighted_ls <- function(design_mat, weights, Y, rank, start=c("median", "mean"))
   if (rank < ncol(design_mat) & start == "median"){
     # drop the median at first
     drop_id <- which.min(abs(tau_hat-median(tau_hat)))
+  } else if (rank < ncol(design_mat) & start == "mode"){
+    kernel_fit_tau <- density(tau_hat, bw="SJ", kernel="epanechnikov")
+    tau_mode <- kernel_fit_tau$x[which.max(kernel_fit_tau$y)]
+    drop_id <- which.min(abs(tau_hat - tau_mode))
   } else{
     drop_id <- which.min(abs(test_statistic))
   }
@@ -48,12 +52,12 @@ weighted_ls <- function(design_mat, weights, Y, rank, start=c("median", "mean"))
   weighted_RSS <- drop(t(resid) %*% weights %*% resid)
   AIC_value <- nrow(design_mat) * log(weighted_RSS) +
     ncol(design_mat) * 2
-  return(list(AIC=AIC_value, drop=drop_id))
+  return(list(AIC=AIC_value, drop=drop_id, tau_hat=tau_hat))
 }
 
 
 # generalized least square
-backward_selection <- function(count_data, glm_result, start=c("median", "mean")){
+backward_selection <- function(count_data, glm_result, start=c("median", "mean", "mode")){
 
   start <- match.arg(start) # the first taxon to drop: median or mean?
   num_taxa <- nrow(count_data)
@@ -81,6 +85,8 @@ backward_selection <- function(count_data, glm_result, start=c("median", "mean")
 
   # first fit the full model
   current_model <- weighted_ls(design_matrix, weights, logit_effects, num_taxa-1, start)
+  full_tau_hat <- current_model$tau_hat
+  names(full_tau_hat) <- taxa_names
   reference_taxa <- c()
   # backward selection
   while(TRUE){
@@ -98,6 +104,7 @@ backward_selection <- function(count_data, glm_result, start=c("median", "mean")
     }
   }
 
-  return(reference_taxa)
+  return(list(reftaxa = reference_taxa,
+              full_tau_hat = full_tau_hat))
 }
 

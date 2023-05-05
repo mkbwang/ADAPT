@@ -147,7 +147,7 @@ reference_GLM <- function(count_data, metadata, covar, reftaxa){
   glmdisp_result <- data.frame(Taxon = TBDtaxa,
                                effect=0,
                                SE=0,
-                               Pval=0)
+                               pval=0)
   outcome <- foreach(j=1:nrow(glmdisp_result), .combine=rbind,
                      .packages="dplyr", .inorder=FALSE,
                      .export=c("glm.binomial.disp"),
@@ -191,6 +191,7 @@ reference_GLM <- function(count_data, metadata, covar, reftaxa){
   glmdisp_result$effect[outcome$ID] <- outcome$effect
   glmdisp_result$SE[outcome$ID] <- outcome$SE
   glmdisp_result$pval[outcome$ID] <- outcome$pval
+  glmdisp_result$W <- glmdisp_result$effect / glmdisp_result$SE
   glmdisp_result$pval_adjust <- p.adjust(glmdisp_result$pval, method="BH")
 
   return(glmdisp_result)
