@@ -1,6 +1,6 @@
 
-source('POLDA/overdisperse_GLM.R')
-source('POLDA/Reference_Selection.R')
+source('/home/wangmk/MDAWG/POLDA/POLDA/overdisperse_GLM.R')
+source('/home/wangmk/MDAWG/POLDA/POLDA/Reference_Selection.R')
 
 
 polda <- function(otu_table, metadata, covar,

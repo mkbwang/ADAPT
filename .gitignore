@@ -13,6 +13,7 @@
 *.rds
 *.txt
 *.gz
+*.out
 *_Model_Summary/
 *_plots/
 archived_GLMM/
