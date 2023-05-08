@@ -154,15 +154,15 @@ reference_GLM <- function(count_data, metadata, covar, reftaxa){
                      .errorhandling="remove") %dopar% {
                        estimation <- list(ID=j, effect=NA, SE=NA, pval=NA, Fail=TRUE)
                        test_taxon <- as.character(glmdisp_result$Taxon[j])
-                       selected_counts <- cbind(refcounts, TBD_counts[test_taxon, ]) |> as.data.frame()
-                       colnames(selected_counts) <- c('Reftaxa', 'Testtaxon')
+                       selected_counts <- cbind(TBD_counts[test_taxon, ], refcounts) |> as.data.frame()
+                       colnames(selected_counts) <- c('Testtaxon', 'Reftaxa')
                        selected_counts[, covar] <- metadata[, covar]
                        selected_counts$ID <- row.names(selected_counts)
 
                        selected_counts$totcounts <- selected_counts$Reftaxa + selected_counts$Testtaxon
                        selected_counts <- selected_counts %>% filter(totcounts > 0)
 
-                       glm_formula <- sprintf("cbind(Reftaxa, Testtaxon) ~ %s", covar) |> as.formula()
+                       glm_formula <- sprintf("cbind(Testtaxon, Reftaxa) ~ %s", covar) |> as.formula()
                        result <- tryCatch(
                          {
                            rawglm <- glm(glm_formula, family=binomial(link = "logit"),

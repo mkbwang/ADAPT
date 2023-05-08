@@ -34,6 +34,33 @@ gen_phylo <- function(otu, metadata){
   return(phylo_genus_obj_filter)
 }
 
+
+# Baxter etal from https://www.nature.com/articles/s41467-017-01973-8
+crc_baxter_otu <- read.table('real_data/metaanalysis/crc_baxter_results/crc_baxter.otu_table.txt',
+                             sep='\t', row.names=1, header=TRUE)
+crc_baxter_metadata <- read.table('real_data/metaanalysis/crc_baxter_results/crc_baxter.metadata.txt',
+                                  sep='\t', row.names=1, header=TRUE)
+crc_baxter_metadata_subset <- crc_baxter_metadata[crc_baxter_metadata$DiseaseState %in% c("H", "CRC"), ]
+colnames(crc_baxter_otu) <- gsub("X", "", colnames(crc_baxter_otu))
+crc_baxter_phyobj <- gen_phylo(crc_baxter_otu, crc_baxter_metadata_subset)
+baxter_taxa <- tax_table(crc_baxter_phyobj)
+saveRDS(crc_baxter_phyobj,
+        'real_data/metaanalysis/crc_baxter_results/crc_baxter_phyobj.rds')
+
+
+# Zeller etal from https://www.nature.com/articles/s41467-017-01973-8
+crc_zeller_otu <- read.table('real_data/metaanalysis/crc_zeller_results/crc_zeller.otu_table.txt',
+                             sep='\t', row.names=1, header=TRUE)
+colnames(crc_zeller_otu) <- gsub("[.]", "-", colnames(crc_zeller_otu)) 
+crc_zeller_metadata <- read.table('real_data/metaanalysis/crc_zeller_results/crc_zeller.metadata.txt',
+                                  sep='\t', row.names=1, header=TRUE, check.names = F)
+crc_zeller_metadata_subset <- crc_zeller_metadata[crc_zeller_metadata$DiseaseState != "", ]
+crc_zeller_phyobj <- gen_phylo(crc_zeller_otu, crc_zeller_metadata_subset)
+zeller_taxa <- tax_table(crc_zeller_phyobj)
+saveRDS(crc_zeller_phyobj,
+        'real_data/metaanalysis/crc_zeller_results/crc_zeller_phyobj.rds')
+
+
 # schubert etal from https://www.nature.com/articles/s41467-017-01973-8
 cdi_schubert_otu <- read.table('real_data/metaanalysis/cdi_schubert_results/cdi_schubert.otu_table.txt',
                              sep='\t', row.names = 1, header=TRUE)
