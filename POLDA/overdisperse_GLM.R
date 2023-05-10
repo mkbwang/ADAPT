@@ -137,11 +137,48 @@ pairwise_GLM <- function(count_data, metadata, covar){
 }
 
 
+reference_logratio <- function(count_data, metadata, covar, reftaxa){
+  
+  alltaxa <- rownames(count_data)
+  TBDtaxa <- setdiff(alltaxa, reftaxa)
+  refcounts <- count_data[reftaxa, ]
+  if(length(reftaxa) > 1){
+    refcounts <- colSums(count_data[reftaxa, ]) |> as.vector()  
+  }
+  TBD_counts <- count_data[TBDtaxa, ]
+  num_taxa <- length(TBDtaxa)
+  logratio_comp <- data.frame(Taxon = TBDtaxa,
+                              pval=0)
+  
+  outcome <- foreach(j=1:nrow(logratio_comp), .combine=rbind,
+                     .packages="dplyr", .inorder=FALSE) %dopar% {
+                       estimation <- list(ID=j, pval=NA)
+                       test_taxon <- as.character(logratio_comp$Taxon[j])
+                       selected_counts <- cbind(TBD_counts[test_taxon, ], refcounts) |> as.data.frame()
+                       colnames(selected_counts) <- c('Testtaxon', 'Reftaxa')
+                       selected_counts[, covar] <- metadata[, covar]
+                       selected_counts$ID <- row.names(selected_counts)
+                       selected_counts$logratio <- log(selected_counts$Testtaxon+1) - 
+                         log(selected_counts$Reftaxa+1)
+                       lm_formula <- sprintf("logratio ~ %s", covar) |> as.formula()
+                       lm_result <- lm(lm_formula, data=selected_counts) |> summary()
+                       estimation$pval <- lm_result$coefficients[2, 4]
+                       return(as.data.frame(estimation))
+                     }
+  
+  logratio_comp$pval[outcome$ID] <- outcome$pval
+  logratio_comp$pval_adjust <- p.adjust(logratio_comp$pval, method="BH")
+  
+  return(logratio_comp)
+}
 
 reference_GLM <- function(count_data, metadata, covar, reftaxa){
   alltaxa <- rownames(count_data)
   TBDtaxa <- setdiff(alltaxa, reftaxa)
-  refcounts <- colSums(count_data[reftaxa, ]) |> as.vector()
+  refcounts <- count_data[reftaxa, ]
+  if(length(reftaxa) > 1){
+    refcounts <- colSums(count_data[reftaxa, ]) |> as.vector()  
+  }
   TBD_counts <- count_data[TBDtaxa, ]
   num_taxa <- length(TBDtaxa)
   glmdisp_result <- data.frame(Taxon = TBDtaxa,

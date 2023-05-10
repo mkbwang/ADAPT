@@ -32,10 +32,10 @@ polda <- function(otu_table, metadata, covar,
   refglm_result <-reference_GLM(otu_table, metadata, covar, reftaxa) # combine counts of reference taxa
 
 
-  DiffTaxa <- refglm_result$Taxon[refglm_result$pval_adjust < 0.05 & !is.na(refglm_result$pval_adjust)]
+  DiffTaxa <- refglm_result$Taxon[refglm_result$pval < 0.05 & !is.na(refglm_result$pval_adjust)]
 
   result <- list(Structural_zero_Taxa = struct_zero_taxa,
-                 Tau_hat = selection_result$full_tau_hat,
+                 Taxa_Info = selection_result$taxa_info,
                  Reference_Taxa = reftaxa,
                  DA_taxa = DiffTaxa,
                  P_Value = refglm_result)
