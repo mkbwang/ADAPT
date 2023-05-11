@@ -26,24 +26,23 @@ sample_data(zeller_filtered_data) <- zeller_metadata
 zeller_count_mat <- otu_table(zeller_filtered_data)@.Data
 
 
-# Fit POLDA
-start <- proc.time()
-polda_result <- polda(otu_table = zeller_count_mat, metadata=zeller_metadata,
-                      covar="crc", covartype="categorical",
-                      startdrop="median")
-polda_duration <- proc.time() - start
-zeller_pval_df <- polda_result$P_Value |> na.omit()
-polda_DA_taxa <- polda_result$DA_taxa
-polda_reference_taxa <- polda_result$Reference_Taxa
-refcounts <- zeller_count_mat[polda_reference_taxa, ]
+# three steps for POLDA
+zeller_pairglm <- pairwise_GLM(zeller_count_mat,
+                               zeller_metadata,
+                               covar="crc")
+reftaxa_search <- backward_selection(zeller_count_mat,
+                                     zeller_pairglm,
+                                     start="median")
+polda_result <- reference_GLM(zeller_count_mat, zeller_metadata,
+                                     'crc', reftaxa=reftaxa_search$reftaxa)
+polda_DA_taxa <- polda_result$Taxon[polda_result$pval_adjust < 0.05 & !is.na(polda_result$pval)]
+
 
 
 # Fit ANCOMBC
-start <- proc.time()
 ancombc_result <- ancombc(zeller_filtered_data, formula = 'crc', p_adj_method='BH',
                           group='crc', struc_zero=TRUE,
                           zero_cut=0.95)
-ancombc_duration <- proc.time() - start
 ancombc_call <- ancombc_result$res |> as.data.frame()
 colnames(ancombc_call) <- c("beta", "se", "W", "p_val", "q_val", "diff_abn")
 ancombc_DA_taxa <- rownames(ancombc_call)[ancombc_call$diff_abn]
@@ -51,19 +50,20 @@ ancombc_DA_taxa <- rownames(ancombc_call)[ancombc_call$diff_abn]
 
 
 # Fit Aldex2
-start <- proc.time()
 aldex_result <- aldex(zeller_count_mat, zeller_metadata$crc, test='t')
-aldex_duration <- proc.time() - start
 aldex_DA_taxa <- rownames(aldex_result)[aldex_result$wi.eBH < 0.05]
 
 zeller_taxonomy_df <- as(zeller_taxonomy_table, 'matrix') |> as.data.frame()
-zeller_taxonomy_df$polda_DA <- FALSE
-zeller_taxonomy_df$ancombc_DA <- FALSE
-zeller_taxonomy_df$aldex_DA <- FALSE
-
-zeller_taxonomy_df[polda_DA_taxa, 'polda_DA'] <- TRUE
-zeller_taxonomy_df[ancombc_DA_taxa, 'ancombc_DA'] <- TRUE
-zeller_taxonomy_df[aldex_DA_taxa, 'aldex_DA'] <- TRUE
+zeller_taxonomy_df$polda_effect <- NA
+zeller_taxonomy_df[polda_result$Taxon, 'polda_effect'] <- polda_result$effect
+zeller_taxonomy_df$polda_rawp <- NA
+zeller_taxonomy_df[polda_result$Taxon, 'polda_rawp'] <- polda_result$pval
+zeller_taxonomy_df$polda_adjustedp <- NA
+zeller_taxonomy_df[polda_result$Taxon, 'polda_adjustedp'] <- polda_result$pval_adjust
+zeller_taxonomy_df$ancombc_rawp <- ancombc_call$p_val
+zeller_taxonomy_df$ancombc_adjustedp <- ancombc_call$q_val
+zeller_taxonomy_df$aldex_rawp <- aldex_result$wi.ep
+zeller_taxonomy_df$aldex_adjustedp <- aldex_result$wi.eBH
 
 write.csv(zeller_taxonomy_df, 'real_data/metaanalysis/zeller_performance.csv')
 
