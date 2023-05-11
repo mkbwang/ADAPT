@@ -147,22 +147,22 @@ reference_GLM <- function(count_data, metadata, covar, reftaxa){
   glmdisp_result <- data.frame(Taxon = TBDtaxa,
                                effect=0,
                                SE=0,
-                               Pval=0)
+                               pval=0)
   outcome <- foreach(j=1:nrow(glmdisp_result), .combine=rbind,
                      .packages="dplyr", .inorder=FALSE,
                      .export=c("glm.binomial.disp"),
                      .errorhandling="remove") %dopar% {
                        estimation <- list(ID=j, effect=NA, SE=NA, pval=NA, Fail=TRUE)
                        test_taxon <- as.character(glmdisp_result$Taxon[j])
-                       selected_counts <- cbind(refcounts, TBD_counts[test_taxon, ]) |> as.data.frame()
-                       colnames(selected_counts) <- c('Reftaxa', 'Testtaxon')
+                       selected_counts <- cbind(TBD_counts[test_taxon, ], refcounts) |> as.data.frame()
+                       colnames(selected_counts) <- c('Testtaxon', 'Reftaxa')
                        selected_counts[, covar] <- metadata[, covar]
                        selected_counts$ID <- row.names(selected_counts)
 
                        selected_counts$totcounts <- selected_counts$Reftaxa + selected_counts$Testtaxon
                        selected_counts <- selected_counts %>% filter(totcounts > 0)
 
-                       glm_formula <- sprintf("cbind(Reftaxa, Testtaxon) ~ %s", covar) |> as.formula()
+                       glm_formula <- sprintf("cbind(Testtaxon, Reftaxa) ~ %s", covar) |> as.formula()
                        result <- tryCatch(
                          {
                            rawglm <- glm(glm_formula, family=binomial(link = "logit"),
@@ -191,6 +191,7 @@ reference_GLM <- function(count_data, metadata, covar, reftaxa){
   glmdisp_result$effect[outcome$ID] <- outcome$effect
   glmdisp_result$SE[outcome$ID] <- outcome$SE
   glmdisp_result$pval[outcome$ID] <- outcome$pval
+  glmdisp_result$W <- glmdisp_result$effect / glmdisp_result$SE
   glmdisp_result$pval_adjust <- p.adjust(glmdisp_result$pval, method="BH")
 
   return(glmdisp_result)

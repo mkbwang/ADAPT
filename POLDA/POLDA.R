@@ -1,12 +1,6 @@
 
-source('/home/wangmk/MDAWG/POLDA/POLDA/overdisperse_GLM.R')
-source('/home/wangmk/MDAWG/POLDA/POLDA/Reference_Selection.R')
-
-library(ACAT)
-cauchy_combination <- function(pvalvec){
-  pvalvec <- na.omit(pvalvec)
-  return(ACAT(pvalvec))
-}
+source('/home/wangmk/UM/Research/MDAWG/POLDA/POLDA/overdisperse_GLM.R')
+source('/home/wangmk/UM/Research/MDAWG/POLDA/POLDA/Reference_Selection.R')
 
 
 polda <- function(otu_table, metadata, covar,
@@ -33,13 +27,15 @@ polda <- function(otu_table, metadata, covar,
   }
 
   pairglm_result <- pairwise_GLM(otu_table, metadata, covar) # overdispersed GLM
-  reftaxa <- backward_selection(otu_table, pairglm_result, start=startdrop) # reference taxa selection
+  selection_result <- backward_selection(otu_table, pairglm_result, start=startdrop) # reference taxa selection
+  reftaxa <- selection_result$reftaxa
   refglm_result <-reference_GLM(otu_table, metadata, covar, reftaxa) # combine counts of reference taxa
 
 
-  DiffTaxa <- refglm_result$Taxon[refglm_result$pval_adjust < 0.05]
+  DiffTaxa <- refglm_result$Taxon[refglm_result$pval_adjust < 0.05 & !is.na(refglm_result$pval_adjust)]
 
   result <- list(Structural_zero_Taxa = struct_zero_taxa,
+                 Tau_hat = selection_result$full_tau_hat,
                  Reference_Taxa = reftaxa,
                  DA_taxa = DiffTaxa,
                  P_Value = refglm_result)
