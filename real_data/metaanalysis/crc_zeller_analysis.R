@@ -2,6 +2,9 @@ rm(list=ls())
 library(phyloseq)
 library(ANCOMBC)
 library(ALDEx2)
+library(ggplot2)
+library(cowplot)
+library(ggrepel)
 source('POLDA/POLDA.R')
 
 zeller_data <- readRDS('real_data/metaanalysis/crc_zeller_results/crc_zeller_phyobj.rds')
@@ -25,6 +28,25 @@ zeller_metadata$crc <- zeller_metadata$DiseaseState != "H"
 sample_data(zeller_filtered_data) <- zeller_metadata
 zeller_count_mat <- otu_table(zeller_filtered_data)@.Data
 
+# plot taxa prevalence
+prevalence <- rowMeans(zeller_count_mat != 0)
+prevalence_df <- data.frame(Prevalence=prevalence)
+hist_prevalence <- ggplot(prevalence_df, aes(x=Prevalence)) +
+  geom_histogram(color="black", fill="white", bins=20) +
+  xlab('') + ggtitle("Genus Prevalence") + theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+# plot sequencing depths
+library_size <- colSums(zeller_count_mat)
+library_size_df <- data.frame(Library_Size=library_size)
+hist_library_size <- ggplot(library_size_df, aes(x=Library_Size))+
+  geom_histogram(color="black", fill="white", bins=20) +
+  scale_x_log10(breaks = c(30000, 50000, 1e5, 2e5, 3e5)) +
+  xlab('')+
+  ggtitle("Sequencing Depths") + theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+basic_stats_plot <- plot_grid(hist_prevalence, hist_library_size, nrow=1)
 
 # three steps for POLDA
 zeller_pairglm <- pairwise_GLM(zeller_count_mat,
@@ -33,6 +55,41 @@ zeller_pairglm <- pairwise_GLM(zeller_count_mat,
 reftaxa_search <- backward_selection(zeller_count_mat,
                                      zeller_pairglm,
                                      start="median")
+
+# plot estimated tau for the full model
+tau_hats <- reftaxa_search$full_tau_hat
+median_tau_hat <- median(tau_hats)
+Taxa_info_df <- data.frame(Taxa = names(tau_hats),
+                           Tau = tau_hats)
+Taxa_info_df$Prevalence <- prevalence[Taxa_info_df$Taxa]
+hist_tau <- ggplot(Taxa_info_df, aes(x=Tau)) +
+  geom_histogram(color="black", fill="white", bins=20) +
+  scale_x_continuous(breaks=seq(-1, 1.2, 0.2))+
+  geom_vline(xintercept=0, linetype="dashed") +
+  geom_vline(xintercept=median_tau_hat, linetype="dashed", color="red")+
+  xlab('') + ggtitle("Estimated Tau") + theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# plot the prevalence against tau
+zero_counts <- rowSums(zeller_count_mat == 0)
+rank2median <- rank(abs(tau_hats - median(tau_hats)))
+taxa_order <- data.frame(Taxa = names(zero_counts),
+                         Zero_counts = zero_counts,
+                         medianrank = rank2median)
+taxa_order$Revised_rank <- taxa_order$Zero_counts + taxa_order$medianrank
+taxa_order <- taxa_order %>% arrange(Revised_rank)
+Taxa_subset <- Taxa_info_df %>% filter(abs(Tau) < 0.07)
+Taxa_subset <- Taxa_subset %>% arrange(Tau)
+prev_tau_plot <- ggplot(Taxa_subset, aes(x=Tau, y=Prevalence)) +
+  geom_point(size=1.5) + 
+  geom_vline(xintercept=0, linetype="dashed") +
+  geom_vline(xintercept=median_tau_hat, linetype="dashed", color="red")+
+  scale_x_continuous(breaks=seq(-0.07, 0.07, 0.02))+
+  geom_label_repel(aes(label=Taxa), size=2.5) + xlab("Tau") + ylab("Prevalence")+
+  theme_bw()
+plot_grid(hist_tau, prev_tau_plot, nrow=2)
+
+
 polda_result <- reference_GLM(zeller_count_mat, zeller_metadata,
                                      'crc', reftaxa=reftaxa_search$reftaxa)
 polda_DA_taxa <- polda_result$Taxon[polda_result$pval_adjust < 0.05 & !is.na(polda_result$pval)]

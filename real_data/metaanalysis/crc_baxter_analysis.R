@@ -25,6 +25,25 @@ sample_data(baxter_filtered_data) <- baxter_metadata
 baxter_count_mat <- otu_table(baxter_filtered_data)@.Data
 zero_counts <- rowSums(baxter_count_mat == 0)
 
+# prevalence histogram
+prevalence <- rowMeans(baxter_count_mat != 0)
+prevalence_df <- data.frame(Prevalence=prevalence)
+hist_prevalence <- ggplot(prevalence_df, aes(x=Prevalence)) +
+  geom_histogram(color="black", fill="white", bins=20) +
+  xlab('') + ggtitle("Genus Prevalence") + theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+# sequence depths histogram
+library_size <- colSums(baxter_count_mat)
+library_size_df <- data.frame(Library_Size=library_size)
+hist_library_size <- ggplot(library_size_df, aes(x=Library_Size))+
+  geom_histogram(color="black", fill="white", bins=20) +
+  scale_x_log10(breaks = c(1000, 5000, 1e4, 5e4, 1e5)) +
+  xlab('')+
+  ggtitle("Sequencing Depths") + theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+basic_stats_plot <- plot_grid(hist_prevalence, hist_library_size, nrow=1)
+
+
 # three steps for polda
 baxter_pairglm <- pairwise_GLM(baxter_count_mat,
                                baxter_metadata,
@@ -34,11 +53,35 @@ reftaxa_search <- backward_selection(baxter_count_mat,
                                      baxter_pairglm,
                                      start="median")
 
+# plot estimated tau hats for all the taxa
+tau_hats <- reftaxa_search$full_tau_hat
+median_tau_hat <- median(tau_hats)
+Taxa_info_df <- data.frame(Taxa = names(tau_hats),
+                           Tau = tau_hats)
+
+Taxa_info_df$Prevalence <- prevalence[Taxa_info_df$Taxa]
+hist_tau <- ggplot(Taxa_info_df, aes(x=Tau)) +
+  geom_histogram(color="black", fill="white", bins=25) +
+  scale_x_continuous(breaks=seq(-3, 3, 0.5))+
+  geom_vline(xintercept=0, linetype="dashed") +
+  geom_vline(xintercept=median_tau_hat, linetype="dashed", color="red")+
+  xlab('') + ggtitle("Estimated Tau") + theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+# plot prevalence over the tau hat 
+Taxa_subset <- Taxa_info_df %>% filter(abs(Tau - median_tau_hat) < 0.08)
+Taxa_subset <- Taxa_subset %>% arrange(Tau)
+prev_tau_plot <- ggplot(Taxa_subset, aes(x=Tau, y=Prevalence)) +
+  geom_point(size=1.5) + 
+  geom_vline(xintercept=median_tau_hat, linetype="dashed", color="red")+
+  scale_x_continuous(breaks=seq(-0.17, 0.01, 0.02))+
+  geom_label_repel(aes(label=Taxa), size=2.5) + xlab("Tau") + ylab("Prevalence")+
+  theme_bw()
+
 
 polda_result <- reference_GLM(baxter_count_mat, baxter_metadata, 'crc',
                               reftaxa=reftaxa_search$reftaxa)
-
-
 # Fit ANCOMBC
 ancombc_result <- ancombc(baxter_filtered_data, formula = 'crc', p_adj_method='BH',
                           group='crc', struc_zero=TRUE,
