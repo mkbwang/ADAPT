@@ -26,16 +26,41 @@ polda <- function(otu_table, metadata, covar,
     taxa_names <- taxa_names[!is_struct_zero]
   }
 
-  pairglm_result <- pairwise_GLM(otu_table, metadata, covar) # overdispersed GLM
-  selection_result <- backward_selection(otu_table, pairglm_result, start=startdrop) # reference taxa selection
-  reftaxa <- selection_result$reftaxa
+  cat("Estimate relative abundance ratio for all taxa...\n")
+  alltaxa_result <- relabd_GLM(otu_table, metadata, covar)
+  
+  med_relabd_odds <- median(alltaxa_result$effect)
+  cat("Backward reference taxa selection...\n")
+  # backward selection for the "depleted" taxa group
+  Taxa_D <- alltaxa_result$Taxa[alltaxa_result$effect < med_relabd_odds]
+  while(1) {
+    otu_table_D <- otu_table[Taxa_D, ]
+    deplete_taxa_result <- relabd_GLM(otu_table_D, metadata, covar)
+    if (all(deplete_taxa_result$teststat > qnorm(0.05))) break
+    Taxa_D <- deplete_taxa_result$Taxa[deplete_taxa_result$effect > 0]
+  }
+  
+  # backward selection for the "enriched" taxa group
+  Taxa_E <- alltaxa_result$Taxa[alltaxa_result$effect > med_relabd_odds]
+  while(1){
+    otu_table_E <- otu_table[Taxa_E, ]
+    enriched_taxa_result <- relabd_GLM(otu_table_E, metadata, covar)
+    if (all(enriched_taxa_result$teststat < qnorm(0.95))) break
+    Taxa_E <- enriched_taxa_result$Taxa[enriched_taxa_result$effect < 0]
+  }
+  
+  reftaxa <- c(Taxa_D, Taxa_E)
+  
+  # pairglm_result <- pairwise_GLM(otu_table, metadata, covar) # overdispersed GLM
+  # selection_result <- backward_selection(otu_table, pairglm_result, start=startdrop) # reference taxa selection
+  # reftaxa <- selection_result$reftaxa
+  cat("Find differentially abundant taxa based on reference taxa...\n")
   refglm_result <-reference_GLM(otu_table, metadata, covar, reftaxa) # combine counts of reference taxa
 
 
-  DiffTaxa <- refglm_result$Taxon[refglm_result$pval_adjust < 0.05 & !is.na(refglm_result$pval_adjust)]
+  DiffTaxa <- refglm_result$Taxon[refglm_result$pval_adjust < 0.05]
 
   result <- list(Structural_zero_Taxa = struct_zero_taxa,
-                 Tau_hat = selection_result$full_tau_hat,
                  Reference_Taxa = reftaxa,
                  DA_taxa = DiffTaxa,
                  P_Value = refglm_result)
