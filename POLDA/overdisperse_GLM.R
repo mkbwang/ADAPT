@@ -75,6 +75,50 @@ glm.binomial.disp <- function(object, maxit = 30, verbose = TRUE)
 }
 
 
+relabd_GLM <- function(count_data, metadata, covar){
+  taxa_names <- row.names(count_data)
+  glmdisp_result <- data.frame(Taxa=taxa_names,
+                               effect = 0,
+                               SE = 0,
+                               teststat = 0,
+                               pval = 0)
+  outcome <- foreach(j=1:length(taxa_names), .combine=rbind,
+                     .packages="dplyr", .inorder=FALSE,
+                     .export=c("glm.binomial.disp"),
+                     .errorhandling="remove") %dopar% {
+                       selected_taxon <- count_data[j, ] # count of selected taxon
+                       others <- colSums(count_data[-j, ]) # summed counts of other taxa
+                       counts_df <- cbind(selected_taxon, others) |> as.data.frame()
+                       colnames(counts_df) <- c("Taxon", "Others")
+                       counts_df[, covar] <- metadata[, covar]
+                       glm_formula <- sprintf("cbind(Taxon, Others) ~ %s", covar) |> as.formula()
+                       
+                       rawglm <- glm(glm_formula, family=binomial(link = "logit"),
+                                     data=counts_df) # raw GLM
+                       corrected_glm <- glm.binomial.disp(rawglm, verbose = FALSE) %>%
+                         summary() # corrected overdispersed GLM
+                       
+                       corrected_effect <- corrected_glm$coefficients[2, 1]
+                       corrected_SE <- corrected_glm$coefficients[2, 2]
+                       corrected_teststat <- corrected_effect/corrected_SE
+                       corrected_pval <- corrected_glm$coefficients[2, 4]
+                       estimation <- list(ID=j, effect=corrected_effect,
+                                          SE=corrected_SE,
+                                          teststat=corrected_teststat,
+                                          pval=corrected_pval)
+                       return(as.data.frame(estimation))
+                       
+                     }
+  
+  glmdisp_result$effect[outcome$ID] <- outcome$effect
+  glmdisp_result$SE[outcome$ID] <- outcome$SE
+  glmdisp_result$teststat[outcome$ID] <- outcome$teststat
+  glmdisp_result$pval[outcome$ID] <- outcome$pval
+  
+  return(glmdisp_result)
+}
+
+
 pairwise_GLM <- function(count_data, metadata, covar){
   # count_data is the count data matrix
   # metadata contains the covar(variable of interest) and adjust_var(adjustment variable)
