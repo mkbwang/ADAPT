@@ -4,8 +4,7 @@ source('/home/wangmk/UM/Research/MDAWG/POLDA/POLDA/Reference_Selection.R')
 
 
 polda <- function(otu_table, metadata, covar,
-                  covartype=c("categorical", "numerical"),
-                  startdrop=c("median", "mean")){
+                  covartype=c("categorical", "numerical")){
 
   covartype <- match.arg(covartype)
   taxa_names <- row.names(otu_table) # assume taxa are rows
@@ -36,7 +35,8 @@ polda <- function(otu_table, metadata, covar,
   while(1) {
     otu_table_D <- otu_table[Taxa_D, ]
     deplete_taxa_result <- relabd_GLM(otu_table_D, metadata, covar)
-    if (all(deplete_taxa_result$teststat > qnorm(0.05))) break
+    if (all(deplete_taxa_result$teststat > qnorm(0.05)) & 
+        all(deplete_taxa_result$teststat < qnorm(0.95))) break
     Taxa_D <- deplete_taxa_result$Taxa[deplete_taxa_result$effect > 0]
   }
   
@@ -45,7 +45,8 @@ polda <- function(otu_table, metadata, covar,
   while(1){
     otu_table_E <- otu_table[Taxa_E, ]
     enriched_taxa_result <- relabd_GLM(otu_table_E, metadata, covar)
-    if (all(enriched_taxa_result$teststat < qnorm(0.95))) break
+    if (all(enriched_taxa_result$teststat > qnorm(0.05)) & 
+        all(enriched_taxa_result$teststat < qnorm(0.95))) break
     Taxa_E <- enriched_taxa_result$Taxa[enriched_taxa_result$effect < 0]
   }
   
