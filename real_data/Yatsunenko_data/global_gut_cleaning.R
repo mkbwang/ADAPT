@@ -15,11 +15,13 @@ library(magrittr)
 
 meta_data=read_tsv("real_data/Yatsunenko_data/global_gut_metadata.txt")
 meta_data=meta_data%>%transmute(Sample.ID=`SampleID`, age=AGE, sex=SEX, country=COUNTRY)%>%
-  arrange(Sample.ID)
+  arrange(Sample.ID) %>% as.data.frame()
 meta_data=meta_data[complete.cases(meta_data), ]
 meta_data$age=as.numeric(meta_data$age)
 meta_data$country=recode(meta_data$country, `GAZ:Malawi` = "MA",
                          `GAZ:United States of America` = "US", `GAZ:Venezuela` = "VEN")
+rownames(meta_data) <- meta_data$Sample.ID
+meta_data$Sample.ID <- NULL
 
 # metadata read in 2
 
@@ -34,14 +36,32 @@ meta_data2$bmi=signif(as.numeric(meta_data2$bmi), digits = 2)
 meta_data2$breast.fed[which(meta_data2$breast.fed=="NA1")]="NA"
 
 # read in taxonomy
-taxonomy=read_tsv("real_data/Yatsunenko_data/global_gut_taxonomy.txt")
-taxonomy=taxonomy%>%rowwise()%>%
-  mutate(genus_name=paste(Phylum, Genus, sep = ";"))
+taxonomy=read_tsv("real_data/Yatsunenko_data/global_gut_taxonomy.txt") |> as.data.frame()
+rownames(taxonomy) <- as.character(taxonomy$OTU_ID)
+taxonomy$OTU_ID <- NULL
 
 
 # read in the OTU table and aggregate into phylum level
-otu_table=read_tsv("real_data/Yatsunenko_data/global_gut_otu.txt")
-otu_table=otu_table[, -532] # get rid of taxonomy column
+otu_table=read_tsv("real_data/Yatsunenko_data/global_gut_otu.txt") |> as.data.frame()
+rownames(otu_table) <- as.character(otu_table$OTU_ID)
+otu_table=otu_table[, -c(1, 532)] # get rid of taxonomy column
+
+
+# select a subset of taxa and individuals as template
+US_adult <- meta_data[meta_data$country == "US" & meta_data$age > 18, ] |> na.omit()
+otu_table_subset <- otu_table[, rownames(US_adult)]
+
+taxa_meancount <- rowMeans(otu_table_subset)
+taxa_prevalence <- rowMeans(otu_table_subset != 0)
+taxa_filter <- taxa_prevalence > 0.5 & taxa_meancount > 10
+
+otu_table_subset <- otu_table_subset[taxa_filter, ]
+subset_taxonomy <- taxonomy[taxa_filter, ]
+simulation_template <- phyloseq(otu_table(as.matrix(otu_table_subset), taxa_are_rows=TRUE),
+                                tax_table(as.matrix(subset_taxonomy)),
+                                sample_data(US_adult))
+saveRDS(simulation_template, "simulation/data/Yatsunenko_template.rds")
+
 otu_table$OTU_ID=taxonomy$Phylum[match(otu_table$OTU_ID, taxonomy$OTU_ID)]
 phylum_table=otu_table%>%group_by(OTU_ID)%>%
   summarise_all(sum)
