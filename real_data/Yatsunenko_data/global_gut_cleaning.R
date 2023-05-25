@@ -11,54 +11,55 @@ library(ggpubr)
 library(magrittr)
 
 
-# metadata read in
-
-meta_data=read_tsv("real_data/Yatsunenko_data/global_gut_metadata.txt")
-meta_data=meta_data%>%transmute(Sample.ID=`SampleID`, age=AGE, sex=SEX, country=COUNTRY)%>%
-  arrange(Sample.ID) %>% as.data.frame()
-meta_data=meta_data[complete.cases(meta_data), ]
-meta_data$age=as.numeric(meta_data$age)
-meta_data$country=recode(meta_data$country, `GAZ:Malawi` = "MA",
-                         `GAZ:United States of America` = "US", `GAZ:Venezuela` = "VEN")
-rownames(meta_data) <- meta_data$Sample.ID
-meta_data$Sample.ID <- NULL
-
 # metadata read in 2
 
-meta_data2=read_excel("real_data/Yatsunenko_data/NIHMS365354-supplement-3.xls", sheet = 1, skip = 2)
-meta_data2=meta_data2[!is.na(meta_data2$`Sample Identifier`), ]
-meta_data2=meta_data2%>%
-  transmute(Sample.ID=`Sample Identifier`, age=`Age (Years)`, gender=Gender,
-            bmi=`BMI (kg/m2)`, breast.fed=`Breast-fed`, country=Country)%>%
+meta_data=read_excel("real_data/Yatsunenko_data/NIHMS365354-supplement-3.xls", sheet = 1, skip = 2)
+meta_data=meta_data[!is.na(meta_data$`Sample Identifier`), ]
+meta_data=meta_data%>%
+  transmute(Sample.ID=`Sample Identifier`, age=`Age (Years)`, gender=Gender,country=Country,
+            Depth = `Number of V4-16S rRNA Illumina sequences`)%>%
   arrange(Sample.ID)
-meta_data2$age=signif(as.numeric(meta_data2$age), digits = 2)
-meta_data2$bmi=signif(as.numeric(meta_data2$bmi), digits = 2)
-meta_data2$breast.fed[which(meta_data2$breast.fed=="NA1")]="NA"
+meta_data$age=signif(as.numeric(meta_data$age), digits = 2)
+
 
 # read in taxonomy
-taxonomy=read_tsv("real_data/Yatsunenko_data/global_gut_taxonomy.txt") |> as.data.frame()
-rownames(taxonomy) <- as.character(taxonomy$OTU_ID)
-taxonomy$OTU_ID <- NULL
+# taxonomy=read_tsv("real_data/Yatsunenko_data/global_gut_taxonomy.txt") |> as.data.frame()
+# rownames(taxonomy) <- as.character(taxonomy$OTU_ID)
+# taxonomy$OTU_ID <- NULL
 
 
 # read in the OTU table and aggregate into phylum level
-otu_table=read_tsv("real_data/Yatsunenko_data/global_gut_otu.txt") |> as.data.frame()
+otu_table=read_tsv("real_data/Yatsunenko_data/Yatsunenko2012.txt") |> as.data.frame()
 rownames(otu_table) <- as.character(otu_table$OTU_ID)
-otu_table=otu_table[, -c(1, 532)] # get rid of taxonomy column
+taxonomy <- otu_table[, 530]
+otu_table=otu_table[, -c(1, 530)] # get rid of taxonomy column
 
 
 # select a subset of taxa and individuals as template
-US_adult <- meta_data[meta_data$country == "US" & meta_data$age > 18, ] |> na.omit()
-otu_table_subset <- otu_table[, rownames(US_adult)]
+## the subset of individuals and US adults
+US_adult <- meta_data[meta_data$country == "USA" & meta_data$age > 18, ] |> na.omit() |>
+  as.data.frame()
+rownames(US_adult) <- US_adult$Sample.ID
+US_adult$Sample.ID <- NULL
+otu_table_subset <- otu_table[, rownames(US_adult)] |> as.matrix()
+taxonomies <- sapply(taxonomy, function(fullname) strsplit(fullname, split=";")[[1]]) |>
+  t()
+rownames(taxonomies) <- rownames(otu_table)
+colnames(taxonomies) <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species")
 
-taxa_meancount <- rowMeans(otu_table_subset)
-taxa_prevalence <- rowMeans(otu_table_subset != 0)
-taxa_filter <- taxa_prevalence > 0.5 & taxa_meancount > 10
+## the subset of taxa are those whose median relative abundance ranks top 1000
+depths <- colSums(otu_table_subset)
+depths_mat <- t(replicate(nrow(otu_table_subset), depths))
+relative_abundance_mat <- otu_table_subset / depths_mat
+median_relative_abundance <- apply(relative_abundance_mat, 1, median)
+relabd_rank <- length(median_relative_abundance) + 1 - rank(median_relative_abundance)
+selected_taxa <- which(relabd_rank < 1000)
 
-otu_table_subset <- otu_table_subset[taxa_filter, ]
-subset_taxonomy <- taxonomy[taxa_filter, ]
+
+otu_table_subset <- otu_table_subset[selected_taxa, ]
+subset_taxonomies <- taxonomies[selected_taxa, ]
 simulation_template <- phyloseq(otu_table(as.matrix(otu_table_subset), taxa_are_rows=TRUE),
-                                tax_table(as.matrix(subset_taxonomy)),
+                                tax_table(as.matrix(subset_taxonomies)),
                                 sample_data(US_adult))
 saveRDS(simulation_template, "simulation/data/Yatsunenko_template.rds")
 

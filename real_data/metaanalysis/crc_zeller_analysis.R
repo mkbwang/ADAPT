@@ -5,6 +5,7 @@ library(ALDEx2)
 library(ggplot2)
 library(cowplot)
 library(ggrepel)
+library(DescTools)
 source('POLDA/POLDA.R')
 
 zeller_data <- readRDS('real_data/metaanalysis/crc_zeller_results/crc_zeller_phyobj.rds')
@@ -28,7 +29,45 @@ zeller_metadata$crc <- zeller_metadata$DiseaseState != "H"
 sample_data(zeller_filtered_data) <- zeller_metadata
 zeller_count_mat <- otu_table(zeller_filtered_data)@.Data
 
+relabd_result <- relabd_GLM(zeller_count_mat, zeller_metadata, "crc")
+median_effect <- median(relabd_result$effect)
+effect_rank <- rank(abs(relabd_result$effect - median(relabd_result$effect)))
+pvals <- relabd_result$pval
+AndersonDarlingTest(pvals, null="punif")
 
+subset_taxa <- which(effect_rank < nrow(relabd_result)/2)
+taxa_names <- rownames(zeller_count_mat)
+zeller_count_mat_subset <- zeller_count_mat[subset_taxa, ]
+relabd_result_subset <- relabd_GLM(zeller_count_mat_subset, zeller_metadata, "crc")
+subset_pvals <- relabd_result_subset$pval
+AndersonDarlingTest(subset_pvals, null="punif")
+
+
+other_taxa_result <- reference_GLM(zeller_count_mat, zeller_metadata, "crc",
+                                   reftaxa=taxa_names[subset_taxa])
+
+final_result <- rbind(relabd_result_subset, other_taxa_result)
+
+# q value adjustment
+qobj <- qvalue(final_result$pval)
+
+# BH adjustment
+BH_pval <- p.adjust(other_taxa_result$pval, method="BH")
+
+# BUM estimation
+library(BioNet)
+BUM_fit <- fitBumModel(final_result$pval)
+lambda_est <- BUM_fit$lambda
+a_est <- BUM_fit$a 
+pi_ub <- lambda_est + (1-lambda_est) * a_est
+
+cutoff_calculation <- function(a_est, lambda_est, alpha){
+  pi_ub <- lambda_est + (1-lambda_est) * a_est
+  tau <- ((pi_ub - alpha*lambda_est)/(alpha * (1-lambda_est)))^(1/(a_est - 1))
+  return(tau)
+}
+
+# 
 # POLDA analysis
 polda_result <- polda(otu_table = zeller_count_mat,
                        metadata = zeller_metadata,
