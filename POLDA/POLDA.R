@@ -1,7 +1,7 @@
 
 source('/home/wangmk/UM/Research/MDAWG/POLDA/POLDA/overdisperse_GLM.R')
-source('/home/wangmk/UM/Research/MDAWG/POLDA/POLDA/Reference_Selection.R')
 
+library(ClassComparison) # for fitting BUM to p values
 
 polda <- function(otu_table, metadata, covar,
                   covartype=c("categorical", "numerical")){
@@ -25,46 +25,60 @@ polda <- function(otu_table, metadata, covar,
     taxa_names <- taxa_names[!is_struct_zero]
   }
 
-  cat("Estimate relative abundance ratio for all taxa...\n")
-  alltaxa_result <- relabd_GLM(otu_table, metadata, covar)
   
-  med_relabd_odds <- median(alltaxa_result$effect)
-  cat("Backward reference taxa selection...\n")
-  # backward selection for the "depleted" taxa group
-  Taxa_D <- alltaxa_result$Taxa[alltaxa_result$effect < med_relabd_odds]
-  while(1) {
-    otu_table_D <- otu_table[Taxa_D, ]
-    deplete_taxa_result <- relabd_GLM(otu_table_D, metadata, covar)
-    if (all(deplete_taxa_result$teststat > qnorm(0.05)) & 
-        all(deplete_taxa_result$teststat < qnorm(0.95))) break
-    Taxa_D <- deplete_taxa_result$Taxa[deplete_taxa_result$effect > 0]
-  }
-  
-  # backward selection for the "enriched" taxa group
-  Taxa_E <- alltaxa_result$Taxa[alltaxa_result$effect > med_relabd_odds]
+  reftaxa <- taxa_names # initially all the taxa are reference taxa(relative abundance)
   while(1){
-    otu_table_E <- otu_table[Taxa_E, ]
-    enriched_taxa_result <- relabd_GLM(otu_table_E, metadata, covar)
-    if (all(enriched_taxa_result$teststat > qnorm(0.05)) & 
-        all(enriched_taxa_result$teststat < qnorm(0.95))) break
-    Taxa_E <- enriched_taxa_result$Taxa[enriched_taxa_result$effect < 0]
+   
+    relabd_result <- reference_GLM(count_data = otu_table, metadata = metadata, 
+                                    covar, reftaxa = reftaxa, complement=FALSE)
+    
+    estimated_effect <- relabd_result$effect
+    pvals <- relabd_result$pval
+    names(pvals) <- relabd_result$Taxon
+    names(estimated_effect) <- relabd_result$Taxon
+    # check distribution of p values
+    bumfit <- Bum(pvals)
+    lambda_hat <- bumfit@lhat
+    a_hat <- bumfit@ahat
+    # check if the sum of log likelihood is larger than 4 (AIC checking)
+    loglik <- sum(log(likelihoodBum(bumfit)))
+    if (loglik > 4){ # need to continue shrinking reference taxa set
+      distance2med <- abs(estimated_effect - median(estimated_effect))
+      sorted_distance <- sort(distance2med)
+      ordered_taxanames <- names(sorted_distance)
+      reftaxa <- ordered_taxanames[1:(length(ordered_taxanames)/2)]
+    } else{
+      break
+    }
   }
   
-  reftaxa <- c(Taxa_D, Taxa_E)
+  if (length(reftaxa) < length(taxa_names)){
+    # Fit overdispersed GLM for all the other taxa outside reference set
+    complement_result <- reference_GLM(count_data = otu_table, metadata = metadata, 
+                                       covar, reftaxa = reftaxa, complement=TRUE)
+    # combine p values for all the taxa
+    all_GLM_results <- rbind(relabd_result, complement_result)
+  } else{ # relative abundance is good enough for DAA
+    all_GLM_results <- relabd_result
+  }
   
-  # pairglm_result <- pairwise_GLM(otu_table, metadata, covar) # overdispersed GLM
-  # selection_result <- backward_selection(otu_table, pairglm_result, start=startdrop) # reference taxa selection
-  # reftaxa <- selection_result$reftaxa
-  cat("Find differentially abundant taxa based on reference taxa...\n")
-  refglm_result <-reference_GLM(otu_table, metadata, covar, reftaxa) # combine counts of reference taxa
-
-
-  DiffTaxa <- refglm_result$Taxon[refglm_result$pval_adjust < 0.05]
-
+  all_pvals <- all_GLM_results$pval
+  names(all_pvals) <- all_GLM_results$Taxon
+  # find p value cutoff for 0.05 FDR
+  bumfit <- Bum(all_pvals)
+  p_cutoff <- cutoffSignificant(bumfit, alpha=0.05, by="FDR")
+  significant_pvals <- all_pvals[all_pvals < p_cutoff] 
+  if (length(significant_pvals) > 0){
+    DiffTaxa <- names(significant_pvals)
+  } else{
+    DiffTaxa <- c()
+  }
+  
   result <- list(Structural_zero_Taxa = struct_zero_taxa,
                  Reference_Taxa = reftaxa,
                  DA_taxa = DiffTaxa,
-                 P_Value = refglm_result)
+                 P_Value = all_GLM_results,
+                 Pval_Cutoff = p_cutoff)
 
   return(result)
 }

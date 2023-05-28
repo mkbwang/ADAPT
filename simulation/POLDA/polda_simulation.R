@@ -1,23 +1,21 @@
 rm(list=ls())
 library(phyloseq)
-library(BioNet)
+library(ClassComparison)
 library(DescTools)
 library(qvalue)
 library(vegan)
-library(Rfast)
 library(ALDEx2)
+library(dirmult)
 input_folder <- 'simulation/data/'
 output_folder <- 'simulation/POLDA'
 
 source("POLDA/POLDA.R")
 
-
-template <- readRDS(file.path(input_folder, 'Yatsunenko_template.rds'))
+template <- readRDS(file.path(input_folder, 'AGP_template.rds'))
 
 original_count_mat <- otu_table(template)@.Data
 prevalence <- rowMeans(original_count_mat != 0)
-metadata <- sample_data(template) |> as.data.frame()
-metadata$group <- c(rep(0, 64), rep(1, 65))
+metadata <- sample_data(template) |> data.frame()
 
 # shuffle the counts within a taxon
 permuted_count <- original_count_mat
@@ -26,19 +24,56 @@ Nindv <- ncol(original_count_mat)
 for (j in 1:Ntaxa){
   permuted_count[j, ] <- original_count_mat[j, sample(1:Nindv, Nindv)]
 }
+permuted_depths <- colSums(permuted_count)
+hist(permuted_depths, nclass=20)
 
-relabd_result_permute <- relabd_GLM(permuted_count,
+
+# result_original <- polda(otu_table = original_count_mat,
+#                          metadata = metadata,
+#                          covar="X")
+
+relabd_result_permute <- reference_GLM(permuted_count,
                                     metadata=metadata,
-                                    covar="group")
-hist(relabd_result_permute$pval, nclass=50)
-AndersonDarlingTest(relabd_result_permute$pval, null="punif")
-ks.test(relabd_result_permute$pval, y="punif")
+                                    reftaxa = rownames(permuted_count),
+                                    covar="X")
+hist(relabd_result_permute$pval, nclass=30)
+pvals <- relabd_result_permute$pval
 
-BH_pval <- p.adjust(relabd_result_permute$pval, method="BH")
-qvalues <- qvalue(relabd_result_permute$pval)
+bumfit <- Bum(pvals)
+lambda_hat <- bumfit@lhat
+a_hat <- bumfit@ahat
 
-median_effect <- median(relabd_result$effect)
-effect_rank <- rank(abs(relabd_result$effect - median(relabd_result$effect)))
+# likelihood of BUM
+llk_func <- function(lambda_hat, a_hat, p_val){
+  result <- lambda_hat + (1-lambda_hat) * a_hat * (p_val)^(a_hat - 1)
+  return(result)
+}
+# Cutoff calculation for FDR
+cutoff_func <- function(lambda_hat, a_hat, alpha){
+  pi_hat <- lambda_hat + (1 - lambda_hat) * a_hat
+  result <- ((pi_hat - alpha*lambda_hat)/(alpha*(1-lambda_hat)))^(1/(a_hat - 1))
+  return(result)
+}
+
+llk_vals <- rep(0, 1000)
+for (j in 1:1000){
+  llk_vals[j] <- llk_func(lambda_hat=bumfit@lhat,
+                          a_hat=bumfit@ahat,
+                          p_val=pvals[j])
+}
+package_llk <- likelihoodBum(bumfit)
+stopifnot(all(llk_vals == package_llk))
+
+manual_cutoff <- cutoff_func(lambda_hat, a_hat, 0.05)
+package_cutoff <- cutoffSignificant(bumfit, alpha=0.05, by="FDR")
+stopifnot(manual_cutoff == package_cutoff)
+
+
+result_permuted <- polda(otu_table = permuted_count,
+                         metadata=metadata,
+                         covar="X")
+
+
 
 # ID <- 50
 # input_fname <- sprintf('simulated_%d.rds', ID)
