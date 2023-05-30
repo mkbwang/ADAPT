@@ -70,9 +70,9 @@ SimulateCount <- function (
   if (DA_mode == "mixed"){
     DA_taxa <- sample.int(nTaxa, size=num_DAtaxa)
   } else if(DA_mode == "abundant"){
-    DA_taxa <- sample(seq(1, round(nTaxa/2)), size=num_DAtaxa)
+    DA_taxa <- sample(seq(1, round(nTaxa/4)), size=num_DAtaxa)
   } else if(DA_mode == "rare"){
-    DA_taxa <- sample(seq(round(nTaxa/2), nTaxa), size=num_DAtaxa)
+    DA_taxa <- sample(seq(round(nTaxa*3/4), nTaxa), size=num_DAtaxa)
   }
   
   set.seed(seed)
@@ -117,7 +117,7 @@ SimulateCount <- function (
     num_extrazeros <- round(length(simulated_counts) * (zinf - currentzeros) )
     nonzero_entries <- which(simulated_counts != 0)
     selected_entries <- sample(nonzero_entries, size=num_extrazeros,
-                                   prob=1 / sqrt(simulated_counts[nonzero_entries]))
+                                   prob=1 / simulated_counts[nonzero_entries])
     simulated_counts[selected_entries] <- 0
   }
   
