@@ -1,10 +1,9 @@
 
 library(foreach)
 library(doParallel)
+library(parallelly)
 library(dplyr)
-cores=parallelly::availableCores()
-cl <- makeCluster(cores[1]-1) #not to overload your computer
-registerDoParallel(cl)
+
 
 
 # From dispmod package, Williams etal 1982
@@ -92,6 +91,11 @@ reference_GLM <- function(count_data, metadata, covar, reftaxa, complement=FALSE
                                SE=0,
                                teststat=0,
                                pval=0)
+  
+  cores=parallelly::availableCores()
+  cl <- makeCluster(cores[1]-1) #not to overload your computer
+  registerDoParallel(cl)
+  
   outcome <- foreach(j=1:nrow(glmdisp_result), .combine=rbind,
                      .packages="dplyr", .inorder=FALSE,
                      .export=c("glm.binomial.disp"),
@@ -134,6 +138,7 @@ reference_GLM <- function(count_data, metadata, covar, reftaxa, complement=FALSE
                        return(as.data.frame(estimation))
                      }
 
+  stopCluster(cl)
   glmdisp_result$effect[outcome$ID] <- outcome$effect
   glmdisp_result$SE[outcome$ID] <- outcome$SE
   glmdisp_result$teststat[outcome$ID] <- outcome$teststat
