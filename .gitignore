@@ -15,6 +15,7 @@
 *.gz
 *.out
 *.biom
+*.tsv
 *_Model_Summary/
 *_plots/
 archived_GLMM/
