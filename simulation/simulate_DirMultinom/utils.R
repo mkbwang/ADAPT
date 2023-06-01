@@ -15,6 +15,17 @@ rdirichlet <- function(dir_gamma, nSample, seed=2023){
   return(composition)
 }
 
+count_permutation <- function(real_count_mat, nSample=100, seed=1){
+  # rows are taxa, columns are samples
+  if(nSample > ncol(real_count_mat)){
+    nSample <- ncol(real_count_mat)
+  }
+  set.seed(seed)
+  permuted_count <- apply(real_count_mat, 1, 
+                          function(taxa_counts) taxa_counts[sample.int(ncol(real_count_mat), nSample)]) |> t()
+  return(permuted_count)
+}
+
 
 estimate_param <- function(real_count_mat, seed=1){
   # estimate dirichlet multinomial distribution parameter and library sizes based on real data
@@ -22,8 +33,9 @@ estimate_param <- function(real_count_mat, seed=1){
   set.seed(seed)
   Nsample <- ncol(real_count_mat)
   Ntaxa <- nrow(real_count_mat)
-  permuted_count <- apply(real_count_mat, 1, 
-                              function(taxa_counts) taxa_counts[sample.int(Nsample)]) |> t()
+  permuted_count <- count_permutation(real_count_mat = real_count_mat,
+                                      nSample = ncol(real_count_mat),
+                                      seed=seed)
   
   # negative binomial distribution for sequencing depths
   permuted_depths <- colSums(permuted_count)

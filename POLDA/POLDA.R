@@ -1,5 +1,5 @@
 
-source('/home/wangmk/UM/Research/MDAWG/POLDA/POLDA/overdisperse_GLM.R')
+source('/home/wangmk/MDAWG/POLDA/POLDA/overdisperse_GLM.R')
 
 library(ClassComparison) # for fitting BUM to p values
 
@@ -42,7 +42,7 @@ polda <- function(otu_table, metadata, covar,
     a_hat <- bumfit@ahat
     # check if the sum of log likelihood is larger than 4 (AIC checking)
     loglik <- sum(log(likelihoodBum(bumfit)))
-    if (loglik > 4){ # need to continue shrinking reference taxa set
+    if (loglik > 2){ # need to continue shrinking reference taxa set
       distance2med <- abs(estimated_effect - median(estimated_effect))
       sorted_distance <- sort(distance2med)
       ordered_taxanames <- names(sorted_distance)
