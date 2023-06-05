@@ -4,7 +4,8 @@ source('/home/wangmk/MDAWG/POLDA/POLDA/overdisperse_GLM.R')
 library(ClassComparison) # for fitting BUM to p values
 
 polda <- function(otu_table, metadata, covar,
-                  covartype=c("categorical", "numerical")){
+                  covartype=c("categorical", "numerical"),
+                  alpha=0.05){
 
   covartype <- match.arg(covartype)
   taxa_names <- row.names(otu_table) # assume taxa are rows
@@ -65,9 +66,11 @@ polda <- function(otu_table, metadata, covar,
   all_pvals <- all_GLM_results$pval
   names(all_pvals) <- all_GLM_results$Taxon
   # find p value cutoff for 0.05 FDR
-  bumfit <- Bum(all_pvals)
-  p_cutoff <- cutoffSignificant(bumfit, alpha=0.05, by="FDR")
-  significant_pvals <- all_pvals[all_pvals < p_cutoff] 
+  all_adjusted_pvals <- p.adjust(all_pvals, method="BH")
+  all_GLM_results$adjusted_pval <- all_adjusted_pvals
+  # bumfit <- Bum(all_pvals)
+  # p_cutoff <- cutoffSignificant(bumfit, alpha=0.05, by="FDR")
+  significant_pvals <- all_adjusted_pvals[all_adjusted_pvals < alpha] 
   if (length(significant_pvals) > 0){
     DiffTaxa <- names(significant_pvals)
   } else{
@@ -77,8 +80,7 @@ polda <- function(otu_table, metadata, covar,
   result <- list(Structural_zero_Taxa = struct_zero_taxa,
                  Reference_Taxa = reftaxa,
                  DA_taxa = DiffTaxa,
-                 P_Value = all_GLM_results,
-                 Pval_Cutoff = p_cutoff)
+                 P_Value = all_GLM_results)
 
   return(result)
 }

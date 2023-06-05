@@ -4,7 +4,7 @@ data_folder <- '/home/wangmk/MDAWG/POLDA/simulation/data'
 polda_folder <- '/home/wangmk/MDAWG/POLDA/simulation/POLDA'
 
 source("/home/wangmk/MDAWG/POLDA/POLDA/POLDA.R")
-source(file.path(polda_folder, "utils.R"))
+source(file.path(polda_folder, "polda_utils.R"))
 
 
 ID <- as.integer(Sys.getenv('SLURM_ARRAY_TASK_ID'))
@@ -26,8 +26,6 @@ output_null <- list(performance=performance_polda_null,
 saveRDS(output_null, 
         file.path(polda_folder, "null", 
                   sprintf("summary_null_%d.rds", ID)))
-
-
 
 
 # rare DA taxa, low proportion(5%)
@@ -60,6 +58,7 @@ output_unbalanced_rare_medium <- list(performance=performance_unbalanced_rare_me
 saveRDS(output_unbalanced_rare_medium, 
         file.path(polda_folder, "DA_rare", "medium", 
                   sprintf("summary_unbalanced_rare_medium_%d.rds", ID)))
+
 
 # rare DA taxa, high proportion(20%)
 AGP_unbalanced_rare_high <- readRDS(file.path(data_folder, "DA_rare", "high",
@@ -125,6 +124,5 @@ output_unbalanced_abundant_high <- list(performance=performance_unbalanced_abund
 saveRDS(output_unbalanced_abundant_high, 
         file.path(polda_folder, "DA_abundant", "high", 
                   sprintf("summary_unbalanced_abundant_high_%d.rds", ID)))
-
 
 

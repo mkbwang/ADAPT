@@ -1,53 +1,109 @@
 rm(list=ls())
-input_folder <- '/home/wangmk/MDAWG/POLDA/simulation/data'
-output_folder <- '/home/wangmk/MDAWG/POLDA/simulation/ANCOMBC'
-
 library(dplyr)
 library(dacomp)
 
-ID <- 1
-input_fname <- sprintf('simulated_data_%d.rds', ID)
-simulated_data <- readRDS(file.path(input_folder, input_fname))
-
-counts_mat <- t(simulated_data$otu_tab_sim)
+data_folder <- '/home/wangmk/MDAWG/POLDA/simulation/data'
+dacomp_folder <- '/home/wangmk/MDAWG/POLDA/simulation/DACOMP'
 
 
-# find reference taxa
-result.selected.references = dacomp.select_references(
-  X = counts_mat, verbose = F,
-  minimal_TA=10)
-
-# correct reference taxa
-result.selected.references.cleaned = dacomp.validate_references(X = counts_mat, #Counts
-                                                                Y = simulated_data$metadata$X, #Traits
-                                                                ref_obj = result.selected.references, #reference checked, must be object from dacomp.select_references(...)
-                                                                test = DACOMP.TEST.NAME.WILCOXON, #Test used for checking, can be same test used in dacomp.test(...)
-                                                                Q_validation = 0.1, #FDR level for checking
-                                                                Minimal_Counts_in_ref_threshold = 1, #reference taxa will must include at least this number of reads
-                                                                Reduction_Factor = 0.1, #multiplicative factor used for lowering the threshold for the number of reads required in reference taxa at each iteration
-                                                                NR_perm = 1000, #number of permutations used for testing. should be at least 1/(Q_validation/ncol(X))
-                                                                Verbose = T)
+source(file.path(dacomp_folder, "DACOMP_utils.R"))
+ID <- as.integer(Sys.getenv('SLURM_ARRAY_TASK_ID'))
+# ID <- 10
 
 
-# DA test for the rest of taxa
-result.test = dacomp.test(X = counts_mat, #counts data
-                          y = simulated_data$metadata$X, #phenotype in y argument
-                          # obtained from dacomp.select_references(...):
-                          ind_reference_taxa = result.selected.references,
-                          test = DACOMP.TEST.NAME.WILCOXON, #constant, name of test
-                          verbose = F)
+# no DA taxa
+AGP_null <- readRDS(file.path(data_folder, "null",
+                              sprintf("AGP_simulation_null_%d.rds", ID)))
+taxa_info_null <- AGP_null$taxa_info
+dacomp_null <- pipeline(AGP_null)
+performance_null <- evaluation(taxa_info_null, dacomp_null, nullcase=TRUE)
+output_null <- list(performance=performance_null,
+                    dacomp_result=dacomp_null)
+saveRDS(output_null, 
+        file.path(dacomp_folder, "null", 
+                  sprintf("summary_null_%d.rds", ID)))
 
-decision_Pvals <- result.test$p.values.test
-Pvals_adjusted <- p.adjust(decision_Pvals,
-                                    method='BH')
-Pvals_adjusted[is.na(Pvals_adjusted)] <- 1
+# rare DA taxa, low proportion(5%)
+AGP_unbalanced_rare_low <- readRDS(file.path(data_folder, "DA_rare", "low",
+                                             sprintf("AGP_simulation_unbalanced_rare_low_%d.rds", ID)))
+taxa_info_unbalanced_rare_low <- AGP_unbalanced_rare_low$taxa_info
+dacomp_unbalanced_rare_low <- pipeline(AGP_unbalanced_rare_low)
+performance_unbalanced_rare_low <- evaluation(taxa_info_unbalanced_rare_low,
+                                              dacomp_unbalanced_rare_low)
+output_unbalanced_rare_low <- list(performance=performance_unbalanced_rare_low,
+                                   dacomp_result=dacomp_unbalanced_rare_low)
+saveRDS(output_unbalanced_rare_low, 
+        file.path(dacomp_folder, "DA_rare", "low", 
+                  sprintf("summary_unbalanced_rare_low_%d.rds", ID)))
 
-truth <- simulated_data$taxa
-truth$Taxon <- row.names(truth)
 
-combined_results <- cbind(truth, decision_Pvals_adjusted)
-library(pROC)
+# rare DA taxa, medium proportion(10%)
+AGP_unbalanced_rare_medium <- readRDS(file.path(data_folder, "DA_rare", "medium",
+                                                sprintf("AGP_simulation_unbalanced_rare_medium_%d.rds", ID)))
+taxa_info_unbalanced_rare_medium <- AGP_unbalanced_rare_medium$taxa_info
+dacomp_unbalanced_rare_medium <- pipeline(AGP_unbalanced_rare_medium)
+performance_unbalanced_rare_medium <- evaluation(taxa_info_unbalanced_rare_medium,
+                                                 dacomp_unbalanced_rare_medium)
+output_unbalanced_rare_medium <- list(performance=performance_unbalanced_rare_medium,
+                                   dacomp_result=dacomp_unbalanced_rare_medium)
+saveRDS(output_unbalanced_rare_medium, 
+        file.path(dacomp_folder, "DA_rare", "medium", 
+                  sprintf("summary_unbalanced_rare_medium_%d.rds", ID)))
 
-roc_obj <- roc(combined_results$logfold!=0, 1-combined_results$decision_Pvals_adjusted)
-roc_obj$auc
+
+# rare DA taxa, high proportion(20%)
+AGP_unbalanced_rare_high <- readRDS(file.path(data_folder, "DA_rare", "high",
+                                                sprintf("AGP_simulation_unbalanced_rare_high_%d.rds", ID)))
+taxa_info_unbalanced_rare_high <- AGP_unbalanced_rare_high$taxa_info
+dacomp_unbalanced_rare_high <- pipeline(AGP_unbalanced_rare_high)
+performance_unbalanced_rare_high <- evaluation(taxa_info_unbalanced_rare_high,
+                                                 dacomp_unbalanced_rare_high)
+output_unbalanced_rare_high <- list(performance=performance_unbalanced_rare_high,
+                                      dacomp_result=dacomp_unbalanced_rare_high)
+saveRDS(output_unbalanced_rare_high, 
+        file.path(dacomp_folder, "DA_rare", "high", 
+                  sprintf("summary_unbalanced_rare_high_%d.rds", ID)))
+
+
+# abundant DA taxa, low proportion(5%)
+AGP_unbalanced_abundant_low <- readRDS(file.path(data_folder, "DA_abundant", "low",
+                                                 sprintf("AGP_simulation_unbalanced_abundant_low_%d.rds", ID)))
+taxa_info_unbalanced_abundant_low <- AGP_unbalanced_abundant_low$taxa_info
+dacomp_unbalanced_abundant_low <- pipeline(AGP_unbalanced_abundant_low)
+performance_unbalanced_abundant_low <- evaluation(taxa_info_unbalanced_abundant_low,
+                                                  dacomp_unbalanced_abundant_low)
+output_unbalanced_abundant_low <- list(performance=performance_unbalanced_abundant_low,
+                                       dacomp_result=dacomp_unbalanced_abundant_low)
+saveRDS(output_unbalanced_abundant_low, 
+        file.path(dacomp_folder, "DA_abundant", "low", 
+                  sprintf("summary_unbalanced_abundant_low_%d.rds", ID)))
+
+
+# abundant DA taxa, medium proportion(10%)
+AGP_unbalanced_abundant_medium <- readRDS(file.path(data_folder, "DA_abundant", "medium",
+                                                    sprintf("AGP_simulation_unbalanced_abundant_medium_%d.rds", ID)))
+taxa_info_unbalanced_abundant_medium <- AGP_unbalanced_abundant_medium$taxa_info
+dacomp_unbalanced_abundant_medium <- pipeline(AGP_unbalanced_abundant_medium)
+performance_unbalanced_abundant_medium <- evaluation(taxa_info_unbalanced_abundant_medium,
+                                                     dacomp_unbalanced_abundant_medium)
+output_unbalanced_abundant_medium <- list(performance=performance_unbalanced_abundant_medium,
+                                          dacomp_result=dacomp_unbalanced_abundant_medium)
+saveRDS(output_unbalanced_abundant_medium, 
+        file.path(dacomp_folder, "DA_abundant", "medium", 
+                  sprintf("summary_unbalanced_abundant_medium_%d.rds", ID)))
+
+
+# abundant DA taxa, high proportion(20%)
+AGP_unbalanced_abundant_high <- readRDS(file.path(data_folder, "DA_abundant", "high",
+                                                  sprintf("AGP_simulation_unbalanced_abundant_high_%d.rds", ID)))
+taxa_info_unbalanced_abundant_high <- AGP_unbalanced_abundant_high$taxa_info
+dacomp_unbalanced_abundant_high <- pipeline(AGP_unbalanced_abundant_high)
+performance_unbalanced_abundant_high <- evaluation(taxa_info_unbalanced_abundant_high,
+                                                   dacomp_unbalanced_abundant_high)
+output_unbalanced_abundant_high <- list(performance=performance_unbalanced_abundant_high,
+                                        dacomp_result=dacomp_unbalanced_abundant_high)
+saveRDS(output_unbalanced_abundant_high, 
+        file.path(dacomp_folder, "DA_abundant", "high", 
+                  sprintf("summary_unbalanced_abundant_high_%d.rds", ID)))
+
 
