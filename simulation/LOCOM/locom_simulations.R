@@ -19,8 +19,8 @@ sample_metadata <- AGP_null$sample_metadata
 count_mat_null <- AGP_null$count_mat
 locom_null <- locom(otu.table=t(count_mat_null),
                   Y=sample_metadata$X, fdr.nominal=0.05, prev.cut=0.1,
-                  n.rej.stop=2, seed=1,
-                  n.cores=1)
+                  n.rej.stop=5, seed=1,
+                  n.cores=2)
 performance_null <- evaluation(taxa_info_null, locom_null, nullcase=TRUE)
 output_null <- list(performance=performance_null,
                     locom_result=locom_null)
@@ -55,8 +55,8 @@ sample_metadata <- AGP_unbalanced_rare_medium$sample_metadata
 count_mat_unbalanced_rare_medium <- AGP_unbalanced_rare_medium$count_mat
 locom_unbalanced_rare_medium <- locom(otu.table=t(count_mat_unbalanced_rare_medium),
                                    Y=sample_metadata$X, fdr.nominal=0.05, prev.cut=0.1,
-                                   n.rej.stop=2, seed=1,
-                                   n.cores=1)
+                                   n.rej.stop=5, seed=1,
+                                   n.cores=2)
 performance_unbalanced_rare_medium <- evaluation(taxa_info_unbalanced_rare_medium,
                                                  locom_unbalanced_rare_medium)
 output_unbalanced_rare_medium <- list(performance=performance_unbalanced_rare_medium,
@@ -74,8 +74,8 @@ sample_metadata <- AGP_unbalanced_rare_high$sample_metadata
 count_mat_unbalanced_rare_high <- AGP_unbalanced_rare_high$count_mat
 locom_unbalanced_rare_high <- locom(otu.table=t(count_mat_unbalanced_rare_high),
                                       Y=sample_metadata$X, fdr.nominal=0.05, prev.cut=0.1,
-                                      n.rej.stop=2, seed=1,
-                                      n.cores=1)
+                                      n.rej.stop=5, seed=1,
+                                      n.cores=2)
 performance_unbalanced_rare_high <- evaluation(taxa_info_unbalanced_rare_high,
                                                  locom_unbalanced_rare_high)
 output_unbalanced_rare_high <- list(performance=performance_unbalanced_rare_high,
@@ -93,8 +93,8 @@ count_mat_unbalanced_abundant_low <- AGP_unbalanced_abundant_low$count_mat
 sample_metadata <- AGP_unbalanced_abundant_low$sample_metadata
 locom_unbalanced_abundant_low <- locom(otu.table=t(count_mat_unbalanced_abundant_low),
                                        Y=sample_metadata$X, fdr.nominal=0.05, prev.cut=0.1,
-                                       n.rej.stop=2, seed=1,
-                                       n.cores=1)
+                                       n.rej.stop=5, seed=1,
+                                       n.cores=2)
 performance_unbalanced_abundant_low <- evaluation(taxa_info_unbalanced_abundant_low,
                                                   locom_unbalanced_abundant_low)
 output_unbalanced_abundant_low <- list(performance=performance_unbalanced_abundant_low,
@@ -112,8 +112,8 @@ sample_metadata <- AGP_unbalanced_abundant_medium$sample_metadata
 count_mat_unbalanced_abundant_medium <- AGP_unbalanced_abundant_medium$count_mat
 locom_unbalanced_abundant_medium <- locom(otu.table=t(count_mat_unbalanced_abundant_medium),
                                           Y=sample_metadata$X, fdr.nominal=0.05, prev.cut=0.1,
-                                          n.rej.stop=2, seed=1,
-                                          n.cores=1)
+                                          n.rej.stop=5, seed=1,
+                                          n.cores=2)
 performance_unbalanced_abundant_medium <- evaluation(taxa_info_unbalanced_abundant_medium,
                                                      locom_unbalanced_abundant_medium)
 output_unbalanced_abundant_medium <- list(performance=performance_unbalanced_abundant_medium,
@@ -131,8 +131,8 @@ sample_metadata <- AGP_unbalanced_abundant_high$sample_metadata
 count_mat_unbalanced_abundant_high <- AGP_unbalanced_abundant_high$count_mat
 locom_unbalanced_abundant_high <- locom(otu.table=t(count_mat_unbalanced_abundant_high),
                                         Y=sample_metadata$X, fdr.nominal=0.05, prev.cut=0.1,
-                                        n.rej.stop=2, seed=1,
-                                        n.cores=1)
+                                        n.rej.stop=5, seed=1,
+                                        n.cores=2)
 performance_unbalanced_abundant_high <- evaluation(taxa_info_unbalanced_abundant_high,
                                                    locom_unbalanced_abundant_high)
 output_unbalanced_abundant_high <- list(performance=performance_unbalanced_abundant_high,

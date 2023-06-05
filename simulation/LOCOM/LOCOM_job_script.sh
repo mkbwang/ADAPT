@@ -5,7 +5,7 @@
 #SBATCH --mail-user=wangmk@umich.edu
 #SBATCH --mail-type=END,FAIL,BEGIN
 #SBATCH --array=1-100
-#SBATCH --mem=7g
+#SBATCH --mem=10g
 #SBATCH --cpus-per-task=12
 #SBATCH --output=/home/wangmk/MDAWG/POLDA/simulation/LOCOM/slurm-sim-LOCOM.out
 
