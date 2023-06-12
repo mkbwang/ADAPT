@@ -1,11 +1,11 @@
 
-source('/home/wangmk/UM/Research/MDAWG/POLDA/POLDA/overdisperse_GLM.R')
-source('/home/wangmk/UM/Research/MDAWG/POLDA/POLDA/Reference_Selection.R')
+source('/home/wangmk/MDAWG/POLDA/POLDA/overdisperse_GLM.R')
 
+library(ClassComparison) # for fitting BUM to p values
 
 polda <- function(otu_table, metadata, covar,
                   covartype=c("categorical", "numerical"),
-                  startdrop=c("median", "mean")){
+                  alpha=0.05){
 
   covartype <- match.arg(covartype)
   taxa_names <- row.names(otu_table) # assume taxa are rows
@@ -26,19 +26,61 @@ polda <- function(otu_table, metadata, covar,
     taxa_names <- taxa_names[!is_struct_zero]
   }
 
-  pairglm_result <- pairwise_GLM(otu_table, metadata, covar) # overdispersed GLM
-  selection_result <- backward_selection(otu_table, pairglm_result, start=startdrop) # reference taxa selection
-  reftaxa <- selection_result$reftaxa
-  refglm_result <-reference_GLM(otu_table, metadata, covar, reftaxa) # combine counts of reference taxa
-
-
-  DiffTaxa <- refglm_result$Taxon[refglm_result$pval_adjust < 0.05 & !is.na(refglm_result$pval_adjust)]
-
+  
+  reftaxa <- taxa_names # initially all the taxa are reference taxa(relative abundance)
+  while(1){
+   
+    relabd_result <- reference_GLM(count_data = otu_table, metadata = metadata, 
+                                    covar, reftaxa = reftaxa, complement=FALSE)
+    
+    estimated_effect <- relabd_result$effect
+    pvals <- relabd_result$pval
+    names(pvals) <- relabd_result$Taxon
+    names(estimated_effect) <- relabd_result$Taxon
+    # check distribution of p values
+    bumfit <- Bum(pvals)
+    lambda_hat <- bumfit@lhat
+    a_hat <- bumfit@ahat
+    # check if the sum of log likelihood is larger than 4 (AIC checking)
+    loglik <- sum(log(likelihoodBum(bumfit)))
+    if (loglik > 2){ # need to continue shrinking reference taxa set
+      distance2med <- abs(estimated_effect - median(estimated_effect))
+      sorted_distance <- sort(distance2med)
+      ordered_taxanames <- names(sorted_distance)
+      reftaxa <- ordered_taxanames[1:(length(ordered_taxanames)/2)]
+    } else{
+      break
+    }
+  }
+  
+  if (length(reftaxa) < length(taxa_names)){
+    # Fit overdispersed GLM for all the other taxa outside reference set
+    complement_result <- reference_GLM(count_data = otu_table, metadata = metadata, 
+                                       covar, reftaxa = reftaxa, complement=TRUE)
+    # combine p values for all the taxa
+    all_GLM_results <- rbind(relabd_result, complement_result)
+  } else{ # relative abundance is good enough for DAA
+    all_GLM_results <- relabd_result
+  }
+  
+  all_pvals <- all_GLM_results$pval
+  names(all_pvals) <- all_GLM_results$Taxon
+  # find p value cutoff for 0.05 FDR
+  all_adjusted_pvals <- p.adjust(all_pvals, method="BH")
+  all_GLM_results$adjusted_pval <- all_adjusted_pvals
+  # bumfit <- Bum(all_pvals)
+  # p_cutoff <- cutoffSignificant(bumfit, alpha=0.05, by="FDR")
+  significant_pvals <- all_adjusted_pvals[all_adjusted_pvals < alpha] 
+  if (length(significant_pvals) > 0){
+    DiffTaxa <- names(significant_pvals)
+  } else{
+    DiffTaxa <- c()
+  }
+  
   result <- list(Structural_zero_Taxa = struct_zero_taxa,
-                 Tau_hat = selection_result$full_tau_hat,
                  Reference_Taxa = reftaxa,
                  DA_taxa = DiffTaxa,
-                 P_Value = refglm_result)
+                 P_Value = all_GLM_results)
 
   return(result)
 }

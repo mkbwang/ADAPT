@@ -1,10 +1,9 @@
 
 library(foreach)
 library(doParallel)
+library(parallelly)
 library(dplyr)
-cores=parallelly::availableCores()
-cl <- makeCluster(cores[1]-1) #not to overload your computer
-registerDoParallel(cl)
+
 
 
 # From dispmod package, Williams etal 1982
@@ -75,90 +74,40 @@ glm.binomial.disp <- function(object, maxit = 30, verbose = TRUE)
 }
 
 
-pairwise_GLM <- function(count_data, metadata, covar){
-  # count_data is the count data matrix
-  # metadata contains the covar(variable of interest) and adjust_var(adjustment variable)
-  taxa_names <- row.names(count_data)
-  taxa_pairs <- combn(taxa_names, 2) |> t() |> as.data.frame()
-  colnames(taxa_pairs) <- c("T1", "T2")
 
-  # dataframe for all the pairs
-  glmdisp_result <- taxa_pairs
-  glmdisp_result$effect <- 0
-  glmdisp_result$SE <- 0
-  glmdisp_result$pval <- 0
-
-  outcome <- foreach(j=1:nrow(glmdisp_result), .combine=rbind,
-                     .packages="dplyr", .inorder=FALSE,
-                     .export=c("glm.binomial.disp"),
-                     .errorhandling="remove") %dopar% {
-                       estimation <- list(ID=j, effect=NA, SE=NA, pval=NA, Fail=TRUE)
-                       t1 <- as.character(glmdisp_result$T1[j])
-                       t2 <- as.character(glmdisp_result$T2[j])
-                       selected_counts <- count_data[c(t1, t2),] %>%
-                         t() %>% as.data.frame()
-                       colnames(selected_counts) <- c('T1', 'T2')
-                       selected_counts[, covar] <- metadata[, covar]
-                       selected_counts$ID <- row.names(selected_counts)
-
-                       selected_counts$totcounts <- selected_counts$T1 + selected_counts$T2
-                       selected_counts <- selected_counts %>% filter(totcounts > 0)
-
-                       glm_formula <- sprintf("cbind(T1, T2) ~ %s", covar) |> as.formula()
-                       result <- tryCatch(
-                         {
-                           rawglm <- glm(glm_formula, family=binomial(link = "logit"),
-                                         data=selected_counts)
-                           corrected_glm <- glm.binomial.disp(rawglm, verbose = FALSE) %>%
-                             summary()
-                           corrected_effect <- corrected_glm$coefficients[2, 1]
-                           corrected_SE <- corrected_glm$coefficients[2, 2]
-                           corrected_pval <- corrected_glm$coefficients[2, 4]
-                           estimation <- list(ID=j, effect=corrected_effect,
-                                              SE=corrected_SE,
-                                              pval=corrected_pval,
-                                              Fail=FALSE)
-
-                         },
-                         error=function(cond){
-                           estimation <- list(ID=j, effect=NA, SE=NA, pval=NA, Fail=TRUE)
-                         },
-                         warning=function(cond){
-                           estimation <- list(ID=j, effect=NA, SE=NA, pval=NA, Fail=TRUE)
-                         }
-                       )
-                       return(as.data.frame(estimation))
-                     }
-  glmdisp_result$effect[outcome$ID] <- outcome$effect
-  glmdisp_result$SE[outcome$ID] <- outcome$SE
-  glmdisp_result$pval[outcome$ID] <- outcome$pval
-
-  return(glmdisp_result)
-}
-
-
-
-reference_GLM <- function(count_data, metadata, covar, reftaxa){
+reference_GLM <- function(count_data, metadata, covar, reftaxa, complement=FALSE){
   alltaxa <- rownames(count_data)
-  TBDtaxa <- setdiff(alltaxa, reftaxa)
+  TBDtaxa <- NULL
+  if (complement){
+    TBDtaxa <- setdiff(alltaxa, reftaxa)
+  } else{
+    TBDtaxa <- reftaxa
+  }
   refcounts <- colSums(count_data[reftaxa, ]) |> as.vector()
   TBD_counts <- count_data[TBDtaxa, ]
   num_taxa <- length(TBDtaxa)
   glmdisp_result <- data.frame(Taxon = TBDtaxa,
                                effect=0,
                                SE=0,
+                               teststat=0,
                                pval=0)
+  
+  cores=parallelly::availableCores()
+  cl <- makeCluster(cores[1]-1) #not to overload your computer
+  registerDoParallel(cl)
+  
   outcome <- foreach(j=1:nrow(glmdisp_result), .combine=rbind,
                      .packages="dplyr", .inorder=FALSE,
                      .export=c("glm.binomial.disp"),
                      .errorhandling="remove") %dopar% {
-                       estimation <- list(ID=j, effect=NA, SE=NA, pval=NA, Fail=TRUE)
+                       estimation <- list(ID=j, effect=NA, SE=NA, teststat=NA, pval=NA)
                        test_taxon <- as.character(glmdisp_result$Taxon[j])
                        selected_counts <- cbind(TBD_counts[test_taxon, ], refcounts) |> as.data.frame()
                        colnames(selected_counts) <- c('Testtaxon', 'Reftaxa')
                        selected_counts[, covar] <- metadata[, covar]
                        selected_counts$ID <- row.names(selected_counts)
 
+                       # remove the samples with zero counts for both numerator and denominator
                        selected_counts$totcounts <- selected_counts$Reftaxa + selected_counts$Testtaxon
                        selected_counts <- selected_counts %>% filter(totcounts > 0)
 
@@ -171,28 +120,29 @@ reference_GLM <- function(count_data, metadata, covar, reftaxa){
                              summary()
                            corrected_effect <- corrected_glm$coefficients[2, 1]
                            corrected_SE <- corrected_glm$coefficients[2, 2]
+                           corrected_teststat <- corrected_effect / corrected_SE
                            corrected_pval <- corrected_glm$coefficients[2, 4]
                            estimation <- list(ID=j, effect=corrected_effect,
                                               SE=corrected_SE,
-                                              pval=corrected_pval,
-                                              Fail=FALSE)
+                                              teststat=corrected_teststat,
+                                              pval=corrected_pval)
 
                          },
                          error=function(cond){
-                           estimation <- list(ID=j, effect=NA, SE=NA, pval=NA, Fail=TRUE)
+                           estimation <- list(ID=j, effect=NA, SE=NA, teststat=NA, pval=NA)
                          },
                          warning=function(cond){
-                           estimation <- list(ID=j, effect=NA, SE=NA, pval=NA, Fail=TRUE)
+                           estimation <- list(ID=j, effect=NA, SE=NA, teststat=NA, pval=NA)
                          }
                        )
                        return(as.data.frame(estimation))
                      }
 
+  stopCluster(cl)
   glmdisp_result$effect[outcome$ID] <- outcome$effect
   glmdisp_result$SE[outcome$ID] <- outcome$SE
+  glmdisp_result$teststat[outcome$ID] <- outcome$teststat
   glmdisp_result$pval[outcome$ID] <- outcome$pval
-  glmdisp_result$W <- glmdisp_result$effect / glmdisp_result$SE
-  glmdisp_result$pval_adjust <- p.adjust(glmdisp_result$pval, method="BH")
 
   return(glmdisp_result)
 }
