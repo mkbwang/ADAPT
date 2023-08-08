@@ -1,46 +1,7 @@
-library(survival)
-rm(list=ls())
-#test data
-set.seed(2023)
-time1 <- rexp(n=20, rate=0.2)
-time2 <- rexp(n=20, rate=0.1)
-alltimes <- c(time1, time2)
-event <- sample(c(0, 1), size=40, replace=TRUE, prob=c(0.4, 0.6))
-alltimes[!event] <- alltimes[!event] / 2
-
-covariate <- c(rep(0, 20), rep(1, 20))
-adjust_covar <- rnorm(n=40)
-Xmat <- cbind(1, covariate, adjust_covar)
 
 
 
-# AFT model with log logistic regression
-neglogtime <- -log(alltimes)
-initial_intercept <- mean(neglogtime)
-initial_beta <- rep(0, 2)
-initial_lambda <- log(sqrt(var(neglogtime)*3/(pi^2)))
-initial_param <- c(initial_intercept, initial_beta, initial_lambda)
-
-## vanilla logistic distribution log likelihood
-logistic_llk <- function(theta, Y, Delta, X, fixed=NULL){
-
-  stopifnot(ncol(X)==length(theta)-1) # check dimension
-  num_params <- length(theta)
-  beta <- theta[1:(num_params-1)] # coefficients for location
-  if(!is.null(fixed)) {
-    beta[fixed] <- 0
-  }
-  lambda <- theta[num_params] # scale parameter
-  eta <- as.vector(X %*% beta)
-  z <- (eta - Y)/exp(lambda)
-  exp_z_plusone <- 1 + exp(z)
-  llk <- sum(Delta * z)- sum(Delta * lambda) -
-    sum((1+Delta) * log(exp_z_plusone))
-
-  return(llk)
-}
-
-## hessian(negative information) matrix
+## hessian(negative information) matrix of logistic distribution
 logistic_hessian <- function(theta, Y, Delta, X, fixed=NULL){
   stopifnot(ncol(X)==length(theta)-1) # check dimension
   num_params <- length(theta)
@@ -70,102 +31,42 @@ logistic_hessian <- function(theta, Y, Delta, X, fixed=NULL){
   return(output_hessian)
 }
 
-## penalized likelihood
-logistic_penllk <- function(theta, Y, Delta, X, fixed=NULL){
-  vanilla_llk <- logistic_llk(theta, Y, Delta, X, fixed=fixed)
-  info_mat <- -logistic_hessian(theta, Y, Delta, X, fixed=fixed)
-  pen_llk <- vanilla_llk + 0.5*(determinant(info_mat, logarithm=T)$modulus[1])
-  return(pen_llk)
-}
-
-
-
-## Fit standard logistic model and carry out LRT
-
-logistic_estim_result <- optim(par=initial_param, fn=logistic_llk,
-                      Y=neglogtime, Delta=event, X=Xmat, fixed=NULL,
-                      control=list(fnscale=-1), method="BFGS",
-                      hessian=T)
-logistic_estimated_parameter <- logistic_estim_result$par
-logistic_estim_llk <- logistic_llk(theta=logistic_estimated_parameter, Y=neglogtime, Delta=event, X=Xmat)
-
-logistic_null_estim_result <- optim(par=initial_param, fn=logistic_llk,
-                                      Y=neglogtime, Delta=event, X=as.matrix(Xmat), fixed=2,
-                                      control=list(fnscale=-1), method="BFGS",
-                                      hessian=T)
-
-logistic_null_estimated_parameter <- logistic_null_estim_result$par
-logistic_null_estim_llk <- logistic_llk(theta=logistic_null_estimated_parameter,
-                                        Y=neglogtime, Delta=event, X=as.matrix(Xmat))
-
-
-logistic_LRT_stat <- 2*(logistic_estim_llk - logistic_null_estim_llk)
-1 - pchisq(logistic_LRT_stat, df=1)
-
-real_result_logistic <- survreg(Surv(alltimes, event) ~ covariate + adjust_covar, dist="loglogistic")
-
-## Fit penalized logistic model and carry out LRT
-pen_logistic_estim_result <- optim(par=initial_param, fn=logistic_penllk,
-                               Y=neglogtime, Delta=event, X=as.matrix(Xmat), fixed=NULL,
-                               control=list(fnscale=-1), method="BFGS",
-                               hessian=T)
-pen_logistic_estimated_parameter <- pen_logistic_estim_result$par
-pen_logistic_llk <- logistic_penllk(theta=pen_logistic_estimated_parameter,
-                                    Y=neglogtime, Delta=event, X=as.matrix(Xmat))
-
-
-pen_logistic_null_estim_result <- optim(par=initial_param, fn=logistic_penllk,
-                                        Y=neglogtime, Delta=event, X=as.matrix(Xmat), fixed=2,
-                                        control=list(fnscale=-1), method="BFGS",
-                                        hessian=T)
-pen_logistic_null_estimated_parameter <- pen_logistic_null_estim_result$par
-pen_logistic_null_llk <- logistic_penllk(theta=pen_logistic_null_estimated_parameter,
-                                         Y=neglogtime, Delta=event, X=as.matrix(Xmat))
-
-logistic_pen_LRT_stat <- 2*(pen_logistic_llk - pen_logistic_null_llk)
-1 - pchisq(logistic_pen_LRT_stat, df=1)
-
-# logistic_derived_hmat <- logistic_hessian(theta=logistic_estimated_parameter,
-#                                           Y=neglogtime, Delta=event, X=Xmat)
-# stopifnot(max(abs(logistic_derived_hmat - logistic_estim_result$hessian)) < 1e-2)
-
-# AFT result with Weibull distribution
-
-initial_beta0 <- mean(neglogtime)
-initial_beta1 <- 0
-initial_lambda <- log(sqrt(var(neglogtime)*6/(pi^2)))
-initial_param <- c(initial_beta0, initial_beta1, initial_lambda)
-
-
-gumbel_llk <- function(theta, Y, Delta, X){
+## logistic distribution log likelihood
+logistic_llk <- function(theta, Y, Delta, X, Firth=T, fixed=NULL){
 
   stopifnot(ncol(X)==length(theta)-1) # check dimension
   num_params <- length(theta)
   beta <- theta[1:(num_params-1)] # coefficients for location
+  if(!is.null(fixed)) {
+    beta[fixed] <- 0
+  }
   lambda <- theta[num_params] # scale parameter
   eta <- as.vector(X %*% beta)
   z <- (eta - Y)/exp(lambda)
+  exp_z_plusone <- 1 + exp(z)
+  llk <- sum(Delta * z)- sum(Delta * lambda) -
+    sum((1+Delta) * log(exp_z_plusone))
 
-  llk <- -sum(Delta * lambda) + sum(Delta * z) - sum(exp(z))
+  if(Firth){ # add penalty
+    info_mat <- -logistic_hessian(theta, Y, Delta, X, fixed=fixed)
+    llk <- llk + 0.5*(determinant(info_mat, logarithm=T)$modulus[1])
+  }
+
   return(llk)
-
 }
 
-gumbel_estim_result <- optim(par=initial_param, fn=gumbel_llk,
-                               Y=neglogtime, Delta=event, X=Xmat,
-                               control=list(fnscale=-1), method="BFGS",
-                               hessian=T)
-gumbel_estimated_parameter <- gumbel_estim_result$par
-gumbel_estimated_covar <- solve(-gumbel_estim_result$hessian)
-
-real_result_weibull <- survreg(Surv(alltimes, event) ~ covariate, dist="weibull")
 
 
-gumbel_hessian <- function(theta, Y, Delta, X){
+
+## hessian(negative information) matrix of gumbel distribution
+gumbel_hessian <- function(theta, Y, Delta, X, fixed=NULL){
 
   stopifnot(ncol(X)==length(theta)-1) # check dimension
   num_params <- length(theta)
   beta <- theta[1:(num_params-1)] # coefficients for location
+  if(!is.null(fixed)){
+    beta[fixed] <- 0
+  }
   lambda <- theta[num_params] # scale parameter
   eta <- as.vector(X %*% beta)
   z <- (eta - Y)/exp(lambda)
@@ -188,10 +89,165 @@ gumbel_hessian <- function(theta, Y, Delta, X){
 
 }
 
-gumbel_derived_hmat <- gumbel_hessian(theta=gumbel_estimated_parameter,
-                               Y=neglogtime, Delta=event,X=Xmat)
+## gumbel distribution log likelihood
+gumbel_llk <- function(theta, Y, Delta, X, Firth=T, fixed=NULL){
 
-stopifnot(max(abs(gumbel_derived_hmat - gumbel_estim_result$hessian)) < 1e-2)
+  stopifnot(ncol(X)==length(theta)-1) # check dimension
+  num_params <- length(theta)
+  beta <- theta[1:(num_params-1)] # coefficients for location
+  if (!is.null(fixed)){
+    beta[fixed] <- 0
+  }
+  lambda <- theta[num_params] # scale parameter
+  eta <- as.vector(X %*% beta)
+  z <- (eta - Y)/exp(lambda)
 
-#TODO: Add the penalty based on Firth correction
+  llk <- -sum(Delta * lambda) + sum(Delta * z) - sum(exp(z))
 
+  if(Firth){ # add penalty
+    info_mat <- -gumbel_hessian(theta, Y, Delta, X, fixed=fixed)
+    llk <- llk + 0.5*(determinant(info_mat, logarithm=T)$modulus[1])
+  }
+
+  return(llk)
+
+}
+
+
+# LRT test
+LRT_censored_regression <- function(Y, Delta, X, dist=c("loglogistic", "weibull"), Firth=T, test_param=2){
+
+  dist <- match.arg(dist)
+
+
+  full_estimated_parameter <- NULL
+  reduced_estimated_parameter <- NULL
+  teststat <- NULL
+  pval <- NULL
+
+  if(dist == "loglogistic"){
+
+    initial_intercept <- mean(Y)
+    initial_beta <- rep(0, ncol(X)-1)
+    initial_lambda <- log(sqrt(var(Y)*3/(pi^2)))
+    initial_param <- c(initial_intercept, initial_beta, initial_lambda)
+
+    full_estim_result <- optim(par=initial_param, fn=logistic_llk,
+                                       Y=Y, Delta=Delta, X=X, Firth=Firth, fixed=NULL,
+                                       control=list(fnscale=-1), method="BFGS")
+    full_estimated_parameter <- full_estim_result$par
+    full_llk <- logistic_llk(theta=full_estimated_parameter,
+                                        Y=Y, Delta=Delta, X=X, Firth=Firth)
+
+    reduced_estim_result <- optim(par=initial_param, fn=logistic_llk,
+                                            Y=Y, Delta=Delta, X=X, Firth=Firth, fixed=test_param,
+                                            control=list(fnscale=-1), method="BFGS")
+    reduced_estimated_parameter <- reduced_estim_result$par
+    reduced_llk <- logistic_llk(theta=reduced_estimated_parameter,
+                                             Y=Y, Delta=Delta, X=X, Firth=Firth)
+
+    teststat <- 2*(full_llk - reduced_llk)
+    pval <- 1-pchisq(teststat, df=length(test_param))
+
+  } else{ # weibull
+
+    initial_intercept <- mean(Y)
+    initial_beta <- rep(0, ncol(X)-1)
+    initial_lambda <- log(sqrt(var(Y)*6/(pi^2)))
+    initial_param <- c(initial_intercept, initial_beta, initial_lambda)
+
+    full_estim_result <- optim(par=initial_param, fn=gumbel_llk,
+                               Y=Y, Delta=Delta, X=X, Firth=Firth, fixed=NULL,
+                               control=list(fnscale=-1), method="BFGS")
+    full_estimated_parameter <- full_estim_result$par
+    full_llk <- gumbel_llk(theta=full_estimated_parameter,
+                             Y=Y, Delta=Delta, X=X, Firth=Firth)
+
+    reduced_estim_result <- optim(par=initial_param, fn=gumbel_llk,
+                                  Y=Y, Delta=Delta, X=X, Firth=Firth, fixed=test_param,
+                                  control=list(fnscale=-1), method="BFGS")
+    reduced_estimated_parameter <- reduced_estim_result$par
+    reduced_llk <- gumbel_llk(theta=reduced_estimated_parameter,
+                                Y=Y, Delta=Delta, X=X, Firth=Firth)
+
+    teststat <- 2*(full_llk - reduced_llk)
+    pval <- 1-pchisq(teststat, df=length(test_param))
+  }
+
+  names(full_estimated_parameter)[1:ncol(X)] <- colnames(X)
+  names(full_estimated_parameter)[ncol(X)+1] <- "log_Scale"
+  names(reduced_estimated_parameter)[1:ncol(X)] <- colnames(X)
+  names(reduced_estimated_parameter)[ncol(X)+1] <- "log_Scale"
+  result <- list(full_estim_param=full_estimated_parameter,
+                 reduced_estim_param=reduced_estimated_parameter,
+                 teststat=teststat,
+                 pval=pval)
+
+  return(result)
+}
+
+
+#----------- the rest are the testing code -----------------#
+
+# library(survival)
+#
+# #test data
+# set.seed(2023)
+# time1 <- rexp(n=20, rate=0.2)
+# time2 <- rexp(n=20, rate=0.1)
+# alltimes <- c(time1, time2)
+# event <- sample(c(0, 1), size=40, replace=TRUE, prob=c(0.7, 0.3))
+# alltimes[!event] <- alltimes[!event] / 2
+# neglogtime <- -log(alltimes)
+# covariate <- c(rep(0, 20), rep(1, 20))
+# adjust_covar <- rnorm(n=40)
+# Xmat <- cbind(1, covariate, adjust_covar)
+#
+#
+# # AFT model with log logistic regression
+# loglogistic_vanilla_result <- LRT_censored_regression(Y=neglogtime, Delta=event, X=Xmat, dist="loglogistic",
+#                                                    Firth=F)
+#
+# loglogistic_vanilla_hessian <- logistic_hessian(theta=loglogistic_vanilla_result$full_estim_param, Y=neglogtime, Delta=event, X=Xmat)
+# covar_loglogistic_vanilla <- solve(-loglogistic_vanilla_hessian)
+#
+#
+# ## run the standard survreg for comparison
+# standard_full <- survreg(Surv(alltimes, event) ~ covariate + adjust_covar, dist="loglogistic")
+# ## verify coefficient estimate
+# stopifnot(abs(loglogistic_vanilla_result$full_estim_param[1:3] + standard_full$coefficients) < 1e-3)
+# ## verify variance estimate
+# stopifnot(abs(diag(covar_loglogistic_vanilla) - diag(standard_full$var)) < 1e-3)
+# standard_reduced <- survreg(Surv(alltimes, event) ~ adjust_covar, dist="loglogistic")
+# standard_LRTtest <- anova(standard_reduced, standard_full)
+# ## verify p value
+# stopifnot(abs(standard_LRTtest$`Pr(>Chi)`[2] - loglogistic_vanilla_result$pval) < 1e-3)
+#
+#
+# loglogistic_firth_result <- LRT_censored_regression(Y=neglogtime, Delta=event, X=Xmat, dist="loglogistic",
+#                                                     Firth=T)
+#
+#
+# # AFT model with weibull distribution
+#
+# weibull_vanilla_result <- LRT_censored_regression(Y=neglogtime, Delta=event, X=Xmat, dist="weibull",
+#                                                       Firth=F)
+# weibull_vanilla_hessian <- gumbel_hessian(weibull_vanilla_result$full_estim_param, Y=neglogtime, Delta=event, X=Xmat)
+# covar_weibull_vanilla <- solve(-weibull_vanilla_hessian)
+#
+# ## run the standard survreg for comparison
+# standard_full <- survreg(Surv(alltimes, event) ~ covariate + adjust_covar, dist="weibull")
+# ## verify coefficient estimate
+# stopifnot(abs(weibull_vanilla_result$full_estim_param[1:3] + standard_full$coefficients) < 1e-3)
+# ## verify variance estimate
+# stopifnot(abs(diag(covar_weibull_vanilla) - diag(standard_full$var)) < 1e-3)
+# standard_reduced <- survreg(Surv(alltimes, event) ~ adjust_covar, dist="weibull")
+# standard_LRTtest <- anova(standard_reduced, standard_full)
+# ## verify p value
+# stopifnot(abs(standard_LRTtest$`Pr(>Chi)`[2] - weibull_vanilla_result$pval) < 1e-3)
+#
+#
+# weibull_firth_result <- LRT_censored_regression(Y=neglogtime, Delta=event, X=Xmat, dist="weibull",
+#                                                 Firth=T)
+#
+#
