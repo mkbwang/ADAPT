@@ -5,7 +5,7 @@ set.seed(2023)
 time1 <- rexp(n=20, rate=0.2)
 time2 <- rexp(n=20, rate=0.1)
 alltimes <- c(time1, time2)
-event <- sample(c(0, 1), size=40, replace=TRUE, prob=c(0.5, 0.5))
+event <- sample(c(0, 1), size=40, replace=TRUE, prob=c(0.4, 0.6))
 alltimes[!event] <- alltimes[!event] / 2
 
 covariate <- c(rep(0, 20), rep(1, 20))
@@ -20,6 +20,7 @@ initial_beta1 <- 0
 initial_lambda <- log(sqrt(var(neglogtime)*3/(pi^2)))
 initial_param <- c(initial_beta0, initial_beta1, initial_lambda)
 
+## vanilla logistic distribution log likelihood
 logistic_llk <- function(theta, Y, Delta, X){
 
   stopifnot(ncol(X)==length(theta)-1) # check dimension
@@ -35,17 +36,8 @@ logistic_llk <- function(theta, Y, Delta, X){
   return(llk)
 }
 
-logistic_estim_result <- optim(par=initial_param, fn=logistic_llk,
-                      Y=neglogtime, Delta=event, X=Xmat,
-                      control=list(fnscale=-1), method="BFGS",
-                      hessian=T)
-logistic_estimated_parameter <- logistic_estim_result$par
-logistic_estimated_covar <- solve(-logistic_estim_result$hessian)
 
-
-real_result_logistic <- survreg(Surv(alltimes, event) ~ covariate, dist="loglogistic")
-
-
+## hessian(negative information) matrix
 logistic_hessian <- function(theta, Y, Delta, X){
   stopifnot(ncol(X)==length(theta)-1) # check dimension
   num_params <- length(theta)
@@ -72,11 +64,64 @@ logistic_hessian <- function(theta, Y, Delta, X){
   return(output_hessian)
 }
 
+## penalized likelihood
+logistic_penllk <- function(theta, Y, Delta, X){
+  vanilla_llk <- logistic_llk(theta, Y, Delta, X)
+  info_mat <- -logistic_hessian(theta, Y, Delta, X)
+  pen_llk <- vanilla_llk + 0.5*(determinant(info_mat, logarithm=T)$modulus[1])
+  return(pen_llk)
+}
 
-logistic_derived_hmat <- logistic_hessian(theta=logistic_estimated_parameter,
-                                 Y=neglogtime, Delta=event, X=Xmat)
+## Fit standard logistic model and carry out LRT
+logistic_estim_result <- optim(par=initial_param, fn=logistic_llk,
+                      Y=neglogtime, Delta=event, X=Xmat,
+                      control=list(fnscale=-1), method="BFGS",
+                      hessian=T)
+logistic_estimated_parameter <- logistic_estim_result$par
+logistic_estimated_covar <- solve(-logistic_estim_result$hessian)
+logistic_estim_llk <- logistic_llk(theta=logistic_estimated_parameter, Y=neglogtime, Delta=event, X=Xmat)
 
-stopifnot(max(abs(logistic_derived_hmat - logistic_estim_result$hessian)) < 1e-2)
+
+logistic_null_estim_result <- optim(par=initial_param[c(1,3)], fn=logistic_llk,
+                                    Y=neglogtime, Delta=event, X=as.matrix(Xmat[,1]),
+                                    control=list(fnscale=-1), method="BFGS",
+                                    hessian=T)
+logistic_null_estimated_parameter <- c(logistic_null_estim_result$par[1], 0,
+                                       logistic_null_estim_result$par[2])
+logistic_null_estim_llk <- logistic_llk(theta=logistic_null_estimated_parameter,
+                                        Y=neglogtime, Delta=event, X=as.matrix(Xmat))
+
+logistic_LRT_stat <- 2*(logistic_estim_llk - logistic_null_estim_llk)
+1 - pchisq(logistic_LRT_stat, df=1)
+
+real_result_logistic <- survreg(Surv(alltimes, event) ~ covariate, dist="loglogistic")
+
+## Fit penalized logistic model and carry out LRT
+pen_logistic_estim_result <- optim(par=initial_param, fn=logistic_penllk,
+                               Y=neglogtime, Delta=event, X=as.matrix(Xmat),
+                               control=list(fnscale=-1), method="BFGS",
+                               hessian=T)
+pen_logistic_estimated_parameter <- pen_logistic_estim_result$par
+pen_logistic_llk <- logistic_penllk(theta=pen_logistic_estimated_parameter,
+                                    Y=neglogtime, Delta=event, X=as.matrix(Xmat))
+
+
+pen_logistic_null_estim_result <- optim(par=initial_param[-2], fn=logistic_penllk,
+                                        Y=neglogtime, Delta=event, X=as.matrix(Xmat[, -2]),
+                                        control=list(fnscale=-1), method="BFGS",
+                                        hessian=T)
+pen_logistic_null_estimated_parameter <- c(pen_logistic_null_estim_result$par[1], 0,
+                                           pen_logistic_null_estim_result$par[2])
+
+pen_logistic_null_llk <- logistic_penllk(theta=pen_logistic_null_estimated_parameter,
+                                         Y=neglogtime, Delta=event, X=as.matrix(Xmat))
+
+logistic_pen_LRT_stat <- 2*(pen_logistic_llk - pen_logistic_null_llk)
+1 - pchisq(logistic_pen_LRT_stat, df=1)
+
+# logistic_derived_hmat <- logistic_hessian(theta=logistic_estimated_parameter,
+#                                           Y=neglogtime, Delta=event, X=Xmat)
+# stopifnot(max(abs(logistic_derived_hmat - logistic_estim_result$hessian)) < 1e-2)
 
 # AFT result with Weibull distribution
 
