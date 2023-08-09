@@ -12,6 +12,7 @@ polda(
   prevalence_cutoff = 0.1,
   depth_cutoff = 1000,
   features_are_rows = TRUE,
+  ratio_model = c("loglogistic", "weibull"),
   alpha = 0.05
 )
 }

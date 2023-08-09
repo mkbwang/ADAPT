@@ -10,6 +10,7 @@
 #' @param depth_cutoff a sample would be discarded if its sequencing depth is smaller than the threshold
 #' @param features_are_rows whether the microbiome features are on the column or the row of the abundance table
 #' @param alpha the cutoff of the adjusted p values
+#' @param ratio_model the censored regression model for the count ratios. loglogistic or weibull
 #' @importFrom ClassComparison Bum
 #' @importFrom ClassComparison likelihoodBum
 #' @importFrom stats median
@@ -18,6 +19,7 @@
 #' @export
 polda <- function(otu_table, metadata, covar, adjust=NULL,
                   prevalence_cutoff=0.1, depth_cutoff=1000, features_are_rows=TRUE,
+                  ratio_model = c("loglogistic", "weibull"),
                   alpha=0.05){
 
   if(!features_are_rows) otu_table <- t(otu_table)
@@ -28,8 +30,9 @@ polda <- function(otu_table, metadata, covar, adjust=NULL,
   taxa_names <- row.names(otu_table_filtered)
   reftaxa <- taxa_names # initially all the taxa are reference taxa(relative abundance)
   while(1){
-    relabd_result <- GLM_count_ratio(count_data = otu_table_filtered, metadata = metadata,
-                                    covar=covar, adjust=adjust, reftaxa = reftaxa, complement=FALSE)
+    relabd_result <- CR_count_ratio(count_data = otu_table_filtered, metadata = metadata,
+                                    covar=covar, adjust=adjust, reftaxa = reftaxa, complement=FALSE,
+                                    ratio_model=ratio_model)
 
     estimated_effect <- relabd_result$effect
     pvals <- relabd_result$pval
@@ -53,19 +56,20 @@ polda <- function(otu_table, metadata, covar, adjust=NULL,
 
   if (length(reftaxa) < length(taxa_names)){
     # Fit overdispersed GLM for all the other taxa outside reference set
-    complement_result <- GLM_count_ratio(count_data = otu_table_filtered, metadata = metadata,
-                                       covar=covar, adjust=adjust, reftaxa = reftaxa, complement=TRUE)
+    complement_result <- CR_count_ratio(count_data = otu_table_filtered, metadata = metadata,
+                                       covar=covar, adjust=adjust, reftaxa = reftaxa, complement=TRUE,
+                                       ratio_model=ratio_model)
     # combine p values for all the taxa
-    all_GLM_results <- rbind(relabd_result, complement_result)
+    all_CR_results <- rbind(relabd_result, complement_result)
   } else{ # relative abundance is good enough for DAA
-    all_GLM_results <- relabd_result
+    all_CR_results <- relabd_result
   }
 
-  all_pvals <- all_GLM_results$pval
-  names(all_pvals) <- all_GLM_results$Taxon
+  all_pvals <- all_CR_results$pval
+  names(all_pvals) <- all_CR_results$Taxon
   # find p value cutoff for 0.05 FDR
   all_adjusted_pvals <- p.adjust(all_pvals, method="BH")
-  all_GLM_results$adjusted_pval <- all_adjusted_pvals
+  all_CR_results$adjusted_pval <- all_adjusted_pvals
   # bumfit <- Bum(all_pvals)
   # p_cutoff <- cutoffSignificant(bumfit, alpha=0.05, by="FDR")
   significant_pvals <- all_adjusted_pvals[all_adjusted_pvals < alpha]
@@ -77,7 +81,7 @@ polda <- function(otu_table, metadata, covar, adjust=NULL,
 
   result <- list(Reference_Taxa = reftaxa,
                  DA_taxa = DiffTaxa,
-                 P_Value = all_GLM_results)
+                 P_Value = all_CR_results)
 
   return(result)
 }
