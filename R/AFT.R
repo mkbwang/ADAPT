@@ -56,8 +56,6 @@ logistic_llk <- function(theta, Y, Delta, X, Firth=T, fixed=NULL){
 }
 
 
-
-
 ## hessian(negative information) matrix of gumbel distribution
 gumbel_hessian <- function(theta, Y, Delta, X, fixed=NULL){
 
@@ -113,73 +111,85 @@ gumbel_llk <- function(theta, Y, Delta, X, Firth=T, fixed=NULL){
 
 }
 
+# estimate censored regression coefficients
+estim_censored_regression <- function(Y, Delta, X, Firth=T, fixed=NULL, dist=c("loglogistic", "weibull")){
+  selected_llk <- NULL # likelihood function
+  initial_intercept <- mean(Y)
+  initial_beta <- rep(0, ncol(X)-1)
+  initial_lambda <- NULL
+  if (dist == "loglogistic"){
+    initial_lambda <- log(sqrt(var(Y)*3/(pi^2)))
+    selected_llk <- logistic_llk
+  }else{# weibull
+    initial_lambda <- log(sqrt(var(Y)*6/(pi^2)))
+    selected_llk <- gumbel_llk
+  }
+  initial_param <- c(initial_intercept, initial_beta, initial_lambda)
+  num_params <- length(initial_param)
+  estim_params <- NULL
+  if (!Firth || ncol(X) - length(fixed) == 1){ ## no need for Firth penalty
+    estim_result <- optim(par=initial_param, fn=selected_llk,
+                          Y=Y, Delta=Delta, X=X, Firth=F, fixed=fixed,
+                          control=list(fnscale=-1), method="BFGS")
+    estim_params <- estim_result$par
+  } else{
+    ## first estimate everything with Firth penalty
+    estim_result1 <- optim(par=initial_param, fn=selected_llk,
+                           Y=Y, Delta=Delta, X=X, Firth=T, fixed=fixed,
+                           control=list(fnscale=-1), method="BFGS")
+    estim_params <- estim_result1$par
+
+    ## re-estimate the intercept and scale parameter without Firth penalty
+    coefs <- estim_params[2:(length(estim_params)-1)]
+    offsets <- as.vector(X[, -1, drop=F] %*% coefs)
+    new_Y <- Y - offsets
+    estim_result2 <- optim(par=initial_param, fn=selected_llk,
+                           Y=new_Y, Delta=Delta, X=X, Firth=F, fixed=seq(2, num_params-1),
+                           control=list(fnscale=-1), method="BFGS")
+    estim_params[1] <- estim_result2$par[1]
+    estim_params[num_params] <- estim_result2$par[num_params]
+  }
+  return(estim_params)
+}
+
 
 # LRT test
 LRT_censored_regression <- function(Y, Delta, X, dist=c("loglogistic", "weibull"), Firth=T, test_param=2){
 
   dist <- match.arg(dist)
 
-
-  full_estimated_parameter <- NULL
-  reduced_estimated_parameter <- NULL
+  full_estim_param <- NULL
+  reduced_estim_param <- NULL
   teststat <- NULL
   pval <- NULL
 
-  if(dist == "loglogistic"){
-
-    initial_intercept <- mean(Y)
-    initial_beta <- rep(0, ncol(X)-1)
-    initial_lambda <- log(sqrt(var(Y)*3/(pi^2)))
-    initial_param <- c(initial_intercept, initial_beta, initial_lambda)
-
-    full_estim_result <- optim(par=initial_param, fn=logistic_llk,
-                                       Y=Y, Delta=Delta, X=X, Firth=Firth, fixed=NULL,
-                                       control=list(fnscale=-1), method="BFGS")
-    full_estimated_parameter <- full_estim_result$par
-    full_llk <- logistic_llk(theta=full_estimated_parameter,
-                                        Y=Y, Delta=Delta, X=X, Firth=F)
-
-    reduced_estim_result <- optim(par=initial_param, fn=logistic_llk,
-                                            Y=Y, Delta=Delta, X=X, Firth=Firth, fixed=test_param,
-                                            control=list(fnscale=-1), method="BFGS")
-    reduced_estimated_parameter <- reduced_estim_result$par
-    reduced_llk <- logistic_llk(theta=reduced_estimated_parameter,
-                                             Y=Y, Delta=Delta, X=X, Firth=F)
-
-    teststat <- 2*(full_llk - reduced_llk)
-    pval <- 1-pchisq(teststat, df=length(test_param))
-
-  } else{ # weibull
-
-    initial_intercept <- mean(Y)
-    initial_beta <- rep(0, ncol(X)-1)
-    initial_lambda <- log(sqrt(var(Y)*6/(pi^2)))
-    initial_param <- c(initial_intercept, initial_beta, initial_lambda)
-
-    full_estim_result <- optim(par=initial_param, fn=gumbel_llk,
-                               Y=Y, Delta=Delta, X=X, Firth=Firth, fixed=NULL,
-                               control=list(fnscale=-1), method="BFGS")
-    full_estimated_parameter <- full_estim_result$par
-    full_llk <- gumbel_llk(theta=full_estimated_parameter,
-                             Y=Y, Delta=Delta, X=X, Firth=F)
-
-    reduced_estim_result <- optim(par=initial_param, fn=gumbel_llk,
-                                  Y=Y, Delta=Delta, X=X, Firth=Firth, fixed=test_param,
-                                  control=list(fnscale=-1), method="BFGS")
-    reduced_estimated_parameter <- reduced_estim_result$par
-    reduced_llk <- gumbel_llk(theta=reduced_estimated_parameter,
-                                Y=Y, Delta=Delta, X=X, Firth=F)
-
-    teststat <- 2*(full_llk - reduced_llk)
-    pval <- 1-pchisq(teststat, df=length(test_param))
+  selected_llk <- NULL
+  if (dist == "loglogistic"){
+    selected_llk <- logistic_llk
+  }else{# weibull
+    selected_llk <- gumbel_llk
   }
 
-  names(full_estimated_parameter)[1:ncol(X)] <- colnames(X)
-  names(full_estimated_parameter)[ncol(X)+1] <- "log_Scale"
-  names(reduced_estimated_parameter)[1:ncol(X)] <- colnames(X)
-  names(reduced_estimated_parameter)[ncol(X)+1] <- "log_Scale"
-  result <- list(full_estim_param=full_estimated_parameter,
-                 reduced_estim_param=reduced_estimated_parameter,
+
+  full_estim_param <- estim_censored_regression(Y=Y, Delta=Delta, X=X, Firth=Firth,
+                                                 fixed=NULL, dist=dist)
+  full_llk <- selected_llk(theta=full_estim_param,
+                           Y=Y, Delta=Delta, X=X, Firth=F)
+  reduced_estim_param <- estim_censored_regression(Y=Y, Delta=Delta, X=X, Firth=Firth,
+                                                   fixed=test_param, dist=dist)
+  reduced_llk <- selected_llk(theta=reduced_estim_param,
+                              Y=Y, Delta=Delta, X=X, Firth=F)
+
+  teststat <- 2*(full_llk - reduced_llk)
+  pval <- 1-pchisq(teststat, df=length(test_param))
+
+
+  names(full_estim_param)[1:ncol(X)] <- colnames(X)
+  names(full_estim_param)[ncol(X)+1] <- "log_Scale"
+  names(reduced_estim_param)[1:ncol(X)] <- colnames(X)
+  names(reduced_estim_param)[ncol(X)+1] <- "log_Scale"
+  result <- list(full_estim_param=full_estim_param,
+                 reduced_estim_param=reduced_estim_param,
                  teststat=teststat,
                  pval=pval)
 
@@ -196,12 +206,14 @@ LRT_censored_regression <- function(Y, Delta, X, dist=c("loglogistic", "weibull"
 # time1 <- rexp(n=20, rate=0.2)
 # time2 <- rexp(n=20, rate=0.1)
 # alltimes <- c(time1, time2)
-# event <- sample(c(0, 1), size=40, replace=TRUE, prob=c(0.7, 0.3))
+# event <- sample(c(0, 1), size=40, replace=TRUE, prob=c(0.9, 0.1))
 # alltimes[!event] <- alltimes[!event] / 2
 # neglogtime <- -log(alltimes)
 # covariate <- c(rep(0, 20), rep(1, 20))
 # adjust_covar <- rnorm(n=40)
 # Xmat <- cbind(1, covariate, adjust_covar)
+#
+#
 #
 #
 # # AFT model with log logistic regression
@@ -250,4 +262,4 @@ LRT_censored_regression <- function(Y, Delta, X, dist=c("loglogistic", "weibull"
 # weibull_firth_result <- LRT_censored_regression(Y=neglogtime, Delta=event, X=Xmat, dist="weibull",
 #                                                 Firth=T)
 #
-#
+
