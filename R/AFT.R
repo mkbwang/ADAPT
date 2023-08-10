@@ -137,14 +137,14 @@ LRT_censored_regression <- function(Y, Delta, X, dist=c("loglogistic", "weibull"
                                        control=list(fnscale=-1), method="BFGS")
     full_estimated_parameter <- full_estim_result$par
     full_llk <- logistic_llk(theta=full_estimated_parameter,
-                                        Y=Y, Delta=Delta, X=X, Firth=Firth)
+                                        Y=Y, Delta=Delta, X=X, Firth=F)
 
     reduced_estim_result <- optim(par=initial_param, fn=logistic_llk,
                                             Y=Y, Delta=Delta, X=X, Firth=Firth, fixed=test_param,
                                             control=list(fnscale=-1), method="BFGS")
     reduced_estimated_parameter <- reduced_estim_result$par
     reduced_llk <- logistic_llk(theta=reduced_estimated_parameter,
-                                             Y=Y, Delta=Delta, X=X, Firth=Firth)
+                                             Y=Y, Delta=Delta, X=X, Firth=F)
 
     teststat <- 2*(full_llk - reduced_llk)
     pval <- 1-pchisq(teststat, df=length(test_param))
@@ -161,14 +161,14 @@ LRT_censored_regression <- function(Y, Delta, X, dist=c("loglogistic", "weibull"
                                control=list(fnscale=-1), method="BFGS")
     full_estimated_parameter <- full_estim_result$par
     full_llk <- gumbel_llk(theta=full_estimated_parameter,
-                             Y=Y, Delta=Delta, X=X, Firth=Firth)
+                             Y=Y, Delta=Delta, X=X, Firth=F)
 
     reduced_estim_result <- optim(par=initial_param, fn=gumbel_llk,
                                   Y=Y, Delta=Delta, X=X, Firth=Firth, fixed=test_param,
                                   control=list(fnscale=-1), method="BFGS")
     reduced_estimated_parameter <- reduced_estim_result$par
     reduced_llk <- gumbel_llk(theta=reduced_estimated_parameter,
-                                Y=Y, Delta=Delta, X=X, Firth=Firth)
+                                Y=Y, Delta=Delta, X=X, Firth=F)
 
     teststat <- 2*(full_llk - reduced_llk)
     pval <- 1-pchisq(teststat, df=length(test_param))

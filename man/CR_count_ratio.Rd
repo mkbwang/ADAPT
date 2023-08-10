@@ -11,7 +11,8 @@ CR_count_ratio(
   adjust = NULL,
   reftaxa = NULL,
   complement = FALSE,
-  ratio_model = c("loglogistic", "weibull")
+  ratio_model = c("loglogistic", "weibull"),
+  firth = T
 )
 }
 \arguments{
@@ -28,6 +29,8 @@ CR_count_ratio(
 \item{complement}{If true, model the count ratios between each taxa beyond the reference set and the sum of taxa in the reference set. If false, model the relative abundance of taxa within the reference set.}
 
 \item{ratio_model}{Use loglogistic model or the Weibull model to model count ratios with excessive zeros}
+
+\item{firth}{whether to add firth penalty to the likelihood}
 }
 \value{
 The effect sizes, standard errors and p values for each taxon

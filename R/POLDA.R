@@ -9,8 +9,9 @@
 #' @param prevalence_cutoff features whose prevalence are smaller than the cutoff will be excluded from analysis
 #' @param depth_cutoff a sample would be discarded if its sequencing depth is smaller than the threshold
 #' @param features_are_rows whether the microbiome features are on the column or the row of the abundance table
-#' @param alpha the cutoff of the adjusted p values
 #' @param ratio_model the censored regression model for the count ratios. loglogistic or weibull
+#' @param firth whether to add firth penalty to the likelihood
+#' @param alpha the cutoff of the adjusted p values
 #' @importFrom ClassComparison Bum
 #' @importFrom ClassComparison likelihoodBum
 #' @importFrom stats median
@@ -19,7 +20,7 @@
 #' @export
 polda <- function(otu_table, metadata, covar, adjust=NULL,
                   prevalence_cutoff=0.1, depth_cutoff=1000, features_are_rows=TRUE,
-                  ratio_model = c("loglogistic", "weibull"),
+                  ratio_model = c("loglogistic", "weibull"), firth=T,
                   alpha=0.05){
 
   if(!features_are_rows) otu_table <- t(otu_table)
@@ -32,7 +33,7 @@ polda <- function(otu_table, metadata, covar, adjust=NULL,
   while(1){
     relabd_result <- CR_count_ratio(count_data = otu_table_filtered, metadata = metadata,
                                     covar=covar, adjust=adjust, reftaxa = reftaxa, complement=FALSE,
-                                    ratio_model=ratio_model)
+                                    ratio_model=ratio_model, firth=firth)
 
     estimated_effect <- relabd_result$effect
     pvals <- relabd_result$pval
@@ -58,7 +59,7 @@ polda <- function(otu_table, metadata, covar, adjust=NULL,
     # Fit overdispersed GLM for all the other taxa outside reference set
     complement_result <- CR_count_ratio(count_data = otu_table_filtered, metadata = metadata,
                                        covar=covar, adjust=adjust, reftaxa = reftaxa, complement=TRUE,
-                                       ratio_model=ratio_model)
+                                       ratio_model=ratio_model, firth=firth)
     # combine p values for all the taxa
     all_CR_results <- rbind(relabd_result, complement_result)
   } else{ # relative abundance is good enough for DAA

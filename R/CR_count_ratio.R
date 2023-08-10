@@ -9,6 +9,7 @@
 #' @param reftaxa the list of reference taxa
 #' @param complement If true, model the count ratios between each taxa beyond the reference set and the sum of taxa in the reference set. If false, model the relative abundance of taxa within the reference set.
 #' @param ratio_model Use loglogistic model or the Weibull model to model count ratios with excessive zeros
+#' @param firth whether to add firth penalty to the likelihood
 #' @importFrom parallelly availableCores
 #' @importFrom parallel makeCluster
 #' @importFrom doParallel registerDoParallel
@@ -22,7 +23,7 @@
 #' @returns The effect sizes, standard errors and p values for each taxon
 #' @export
 CR_count_ratio <- function(count_data, metadata, covar, adjust=NULL, reftaxa=NULL, complement=FALSE,
-                        ratio_model=c("loglogistic", "weibull")){
+                        ratio_model=c("loglogistic", "weibull"), firth=T){
   alltaxa <- rownames(count_data)
   if (is.null(reftaxa)) reftaxa <- alltaxa
   TBDtaxa <- NULL
@@ -63,7 +64,7 @@ CR_count_ratio <- function(count_data, metadata, covar, adjust=NULL, reftaxa=NUL
                        design_matrix <- cbind(1, metadata[, c(covar, adjust)])
 
                        LRT_result <- LRT_censored_regression(Y=logratios, Delta=existence, X=as.matrix(design_matrix),
-                                                             dist=ratio_model, Firth=T)
+                                                             dist=ratio_model, Firth=firth)
 
                        beta_estimate <- LRT_result$full_estim_param[2] |> unname()
                        teststat_beta <- LRT_result$teststat

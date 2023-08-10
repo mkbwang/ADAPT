@@ -13,6 +13,7 @@ polda(
   depth_cutoff = 1000,
   features_are_rows = TRUE,
   ratio_model = c("loglogistic", "weibull"),
+  firth = T,
   alpha = 0.05
 )
 }
@@ -30,6 +31,10 @@ polda(
 \item{depth_cutoff}{a sample would be discarded if its sequencing depth is smaller than the threshold}
 
 \item{features_are_rows}{whether the microbiome features are on the column or the row of the abundance table}
+
+\item{ratio_model}{the censored regression model for the count ratios. loglogistic or weibull}
+
+\item{firth}{whether to add firth penalty to the likelihood}
 
 \item{alpha}{the cutoff of the adjusted p values}
 }
