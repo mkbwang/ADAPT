@@ -1,4 +1,38 @@
 
+expit <- function(x){
+
+  output <- rep(0, length(x))
+  output[x >= 0] <- 1/(1+exp(-x[x >= 0]))
+  output[x < 0] <- exp(x[x < 0])/(1+exp(x[x < 0]))
+
+  return(output)
+}
+
+logoneplusexp <- function(x){
+
+  output <- rep(0, length(x))
+  smallabs <- abs(x) <= 30
+  verylarge <- x > 30
+  verysmall <- x < -30
+  output[smallabs] <- log(1+exp(x[smallabs]))
+  output[verylarge] <- x[verylarge]
+  output[verysmall] <- 0
+
+  return(output)
+}
+
+abc <- rnorm(n=40)
+ptm <- proc.time()
+for (j in 1:100){
+  transformed_abc <- logoneplusexp(abc)
+}
+proc.time() - ptm
+
+ptm <- proc.time()
+for (j in 1:100){
+  transformed_abc <- log(1+exp(abc))
+}
+proc.time() - ptm
 
 
 ## hessian(negative information) matrix of logistic distribution
@@ -13,18 +47,20 @@ logistic_hessian <- function(theta, Y, Delta, X, fixed=NULL){
   eta <- as.vector(X %*% beta)
   z <- (eta - Y)/exp(lambda)
 
+  expit_z <- expit(z)
+
   output_hessian <- matrix(0, nrow=num_params, ncol=num_params)
 
   ## first calculate the hessian for the beta only
-  weights <- -(1+Delta)/exp(2*lambda)*exp(z)/(1+exp(z))^2
+  weights <- -(1+Delta)/exp(2*lambda)*expit_z*(1-expit_z)
   output_hessian[1:(num_params-1), 1:(num_params-1)] <- t(X) %*% diag(weights) %*% X
 
   ## then calculate the hessian for lambda
-  output_hessian[num_params, num_params] <- -sum((exp(z) - Delta)*z/(1+exp(z))) -
-    sum((1+Delta)*exp(z)*z^2/(1+exp(z))^2)
+  output_hessian[num_params, num_params] <- -sum(((1+Delta)*expit_z - Delta)*z) -
+    sum((1+Delta)*expit_z*(1-expit_z)*z^2)
 
   ## finally calculate derivative over both beta and lambda
-  weights <- 1/exp(lambda)*(1-(1+Delta)/(1+exp(z)) + (1+Delta)*z*exp(z)/(1+exp(z))^2)
+  weights <- 1/exp(lambda)*(1-(1+Delta)*(1-expit_z) + (1+Delta)*z*expit_z*(1-expit_z))
   output_hessian[1:(num_params-1), num_params] <- output_hessian[num_params, 1:(num_params-1)] <-
     as.vector(weights %*% X)
 
@@ -43,9 +79,9 @@ logistic_llk <- function(theta, Y, Delta, X, Firth=T, fixed=NULL){
   lambda <- theta[num_params] # scale parameter
   eta <- as.vector(X %*% beta)
   z <- (eta - Y)/exp(lambda)
-  exp_z_plusone <- 1 + exp(z)
+  logonepluxexp_z <- sapply(z, logoneplusexp)
   llk <- sum(Delta * z)- sum(Delta * lambda) -
-    sum((1+Delta) * log(exp_z_plusone))
+    sum((1+Delta) * logoneplusexp(z))
 
   if(Firth){ # add penalty
     info_mat <- -logistic_hessian(theta, Y, Delta, X, fixed=fixed)
@@ -79,7 +115,7 @@ gumbel_hessian <- function(theta, Y, Delta, X, fixed=NULL){
   output_hessian[num_params, num_params] <- sum(Delta * z - exp(z)*z - exp(z)*z^2)
 
   ## finally calculate the derivative over both beta and lambda
-  weights <- exp(-lambda)*(exp(z)*z+exp(z)-Delta)
+  weights <- exp(z-lambda)*z+exp(z-lambda)-Delta*exp(-lambda)
   output_hessian[num_params, 1:(num_params-1)] <- output_hessian[1:(num_params-1), num_params] <-
     as.vector(weights %*% X)
 
@@ -206,7 +242,7 @@ LRT_censored_regression <- function(Y, Delta, X, dist=c("loglogistic", "weibull"
 # time1 <- rexp(n=20, rate=0.2)
 # time2 <- rexp(n=20, rate=0.1)
 # alltimes <- c(time1, time2)
-# event <- sample(c(0, 1), size=40, replace=TRUE, prob=c(0.9, 0.1))
+# event <- sample(c(0, 1), size=40, replace=TRUE, prob=c(0.7, 0.3))
 # alltimes[!event] <- alltimes[!event] / 2
 # neglogtime <- -log(alltimes)
 # covariate <- c(rep(0, 20), rep(1, 20))
@@ -261,5 +297,5 @@ LRT_censored_regression <- function(Y, Delta, X, dist=c("loglogistic", "weibull"
 #
 # weibull_firth_result <- LRT_censored_regression(Y=neglogtime, Delta=event, X=Xmat, dist="weibull",
 #                                                 Firth=T)
-#
+
 
