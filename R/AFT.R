@@ -21,18 +21,6 @@ logoneplusexp <- function(x){
   return(output)
 }
 
-abc <- rnorm(n=40)
-ptm <- proc.time()
-for (j in 1:100){
-  transformed_abc <- logoneplusexp(abc)
-}
-proc.time() - ptm
-
-ptm <- proc.time()
-for (j in 1:100){
-  transformed_abc <- log(1+exp(abc))
-}
-proc.time() - ptm
 
 
 ## hessian(negative information) matrix of logistic distribution
