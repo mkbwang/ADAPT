@@ -8,7 +8,8 @@
 #' @param adjust the names of the variables for adjustment, NULL if no adjustments
 #' @param reftaxa the list of reference taxa
 #' @param complement If true, model the count ratios between each taxa beyond the reference set and the sum of taxa in the reference set. If false, model the relative abundance of taxa within the reference set.
-#' @param ratio_model Use loglogistic model or the Weibull model to model count ratios with excessive zeros
+#' @param ratio_model Use lognormal, loglogistic model or the Weibull model to model count ratios with excessive zeros
+#' @param zero_censor the nonzero value to replace zeros when calculating censored count ratios, default 1
 #' @param firth whether to add firth penalty to the likelihood
 #' @importFrom parallelly availableCores
 #' @importFrom parallel makeCluster
@@ -23,7 +24,7 @@
 #' @returns The effect sizes, standard errors and p values for each taxon
 #' @export
 CR_count_ratio <- function(count_data, metadata, covar, adjust=NULL, reftaxa=NULL, complement=FALSE,
-                        ratio_model=c("loglogistic", "weibull"), firth=T){
+                        ratio_model=c("lognormal", "loglogistic", "weibull"), zero_censor=1, firth=T){
   alltaxa <- rownames(count_data)
   if (is.null(reftaxa)) reftaxa <- alltaxa
   TBDtaxa <- NULL
@@ -59,7 +60,7 @@ CR_count_ratio <- function(count_data, metadata, covar, adjust=NULL, reftaxa=NUL
                        logratios <- rep(0, length(numerator))
                        logratios[existence] <- log(numerator[existence] / refcounts[existence])
                        if (!all(existence)){
-                         logratios[!existence] <- log(1/(refcounts[!existence]+1))
+                         logratios[!existence] <- log(zero_censor/(refcounts[!existence]))
                        }
                        design_matrix <- cbind(1, metadata[, c(covar, adjust)])
 

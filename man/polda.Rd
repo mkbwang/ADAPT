@@ -12,7 +12,8 @@ polda(
   prevalence_cutoff = 0.1,
   depth_cutoff = 1000,
   features_are_rows = TRUE,
-  ratio_model = c("loglogistic", "weibull"),
+  ratio_model = c("lognormal", "loglogistic", "weibull"),
+  zero_censor = 1,
   firth = T,
   alpha = 0.05
 )
@@ -32,7 +33,9 @@ polda(
 
 \item{features_are_rows}{whether the microbiome features are on the column or the row of the abundance table}
 
-\item{ratio_model}{the censored regression model for the count ratios. loglogistic or weibull}
+\item{ratio_model}{the censored regression model for the count ratios. lognormal, loglogistic or weibull}
+
+\item{zero_censor}{the nonzero value to replace zeros when calculating censored count ratios, default 1}
 
 \item{firth}{whether to add firth penalty to the likelihood}
 

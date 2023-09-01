@@ -80,6 +80,61 @@ logistic_llk <- function(theta, Y, Delta, X, Firth=T, fixed=NULL){
 }
 
 
+## hessian(negative information) matrix of Gaussian distribution
+gaussian_hessian <- function(theta, Y, Delta, X, fixed=NULL){
+  stopifnot(ncol(X)==length(theta)-1) # check dimension
+  num_params <- length(theta)
+  beta <- theta[1:(num_params-1)] # coefficients for location
+  if(!is.null(fixed)){
+    beta[fixed] <- 0
+  }
+  lambda <- theta[num_params] # scale parameter
+  eta <- as.vector(X %*% beta)
+
+  z <- (Y - eta)/exp(lambda)
+
+  cumz <- pnorm(z)# cumulative gaussian distribution of z
+  exp_z2 <- exp(-z^2)
+
+  output_hessian <- matrix(0, nrow=num_params, ncol=num_params)
+  ## first calculate the hessian for the beta only
+  weights <- -1 / exp(2*lambda) * (Delta + (1-Delta)*z*sqrt(exp_z2/(2*pi))/cumz + (1-Delta)*exp_z2/(2*pi)/(cumz^2))
+  output_hessian[1:(num_params-1), 1:(num_params-1)] <- t(X) %*% diag(weights) %*% X
+
+  ## then calculate the hessian for lambda
+  weights <- -2*z*Delta - (1-Delta)*(z^2-1)*sqrt(exp_z2/(2*pi))/cumz - (1-Delta)*z*exp_z2/(2*pi)/(cumz^2)
+  output_hessian[num_params, num_params] <- sum(weights * z)
+
+  ## finally calculate the derivative over both beta and lambda
+  output_hessian[num_params, 1:(num_params-1)] <- output_hessian[1:(num_params-1), num_params] <-
+    as.vector(weights %*% X) / exp(lambda)
+
+  return(output_hessian)
+}
+
+## gaussian distribution log likelihood
+gaussian_llk <- function(theta, Y, Delta, X, Firth=T, fixed=NULL){
+  stopifnot(ncol(X)==length(theta)-1) # check dimension
+  num_params <- length(theta)
+  beta <- theta[1:(num_params-1)] # coefficients for location
+  if (!is.null(fixed)){
+    beta[fixed] <- 0
+  }
+  lambda <- theta[num_params] # scale parameter
+  eta <- as.vector(X %*% beta)
+  z <- (Y - eta)/exp(lambda)
+
+  llk <- sum(Delta * (-0.5 * log(2 * pi) - lambda - 0.5 * z^2)) + sum((1-Delta) * log(pnorm(z)))
+
+  if(Firth){ # add penalty
+    info_mat <- -gaussian_hessian(theta, Y, Delta, X, fixed=fixed)
+    llk <- llk + 0.5*(determinant(info_mat, logarithm=T)$modulus[1])
+  }
+
+  return(llk)
+}
+
+
 ## hessian(negative information) matrix of gumbel distribution
 gumbel_hessian <- function(theta, Y, Delta, X, fixed=NULL){
 
@@ -136,7 +191,7 @@ gumbel_llk <- function(theta, Y, Delta, X, Firth=T, fixed=NULL){
 }
 
 # estimate censored regression coefficients
-estim_censored_regression <- function(Y, Delta, X, Firth=T, fixed=NULL, dist=c("loglogistic", "weibull")){
+estim_censored_regression <- function(Y, Delta, X, Firth=T, fixed=NULL, dist=c("lognormal", "loglogistic", "weibull")){
   selected_llk <- NULL # likelihood function
   initial_intercept <- mean(Y)
   initial_beta <- rep(0, ncol(X)-1)
@@ -144,9 +199,12 @@ estim_censored_regression <- function(Y, Delta, X, Firth=T, fixed=NULL, dist=c("
   if (dist == "loglogistic"){
     initial_lambda <- log(sqrt(var(Y)*3/(pi^2)))
     selected_llk <- logistic_llk
-  }else{# weibull
+  }else if (dist == "weibull"){# weibull
     initial_lambda <- log(sqrt(var(Y)*6/(pi^2)))
     selected_llk <- gumbel_llk
+  } else{ # lognormal
+    initial_lambda <- log(sqrt(var(Y)))
+    selected_llk <- gaussian_llk
   }
   initial_param <- c(initial_intercept, initial_beta, initial_lambda)
   num_params <- length(initial_param)
@@ -178,7 +236,7 @@ estim_censored_regression <- function(Y, Delta, X, Firth=T, fixed=NULL, dist=c("
 
 
 # LRT test
-LRT_censored_regression <- function(Y, Delta, X, dist=c("loglogistic", "weibull"), Firth=T, test_param=2){
+LRT_censored_regression <- function(Y, Delta, X, dist=c("lognormal", "loglogistic", "weibull"), Firth=T, test_param=2){
 
   dist <- match.arg(dist)
 
@@ -190,8 +248,10 @@ LRT_censored_regression <- function(Y, Delta, X, dist=c("loglogistic", "weibull"
   selected_llk <- NULL
   if (dist == "loglogistic"){
     selected_llk <- logistic_llk
-  }else{# weibull
+  }else if (dist == "weibull"){# weibull
     selected_llk <- gumbel_llk
+  }else{ # lognormal
+    selected_llk <- gaussian_llk
   }
 
 
@@ -237,6 +297,28 @@ LRT_censored_regression <- function(Y, Delta, X, dist=c("loglogistic", "weibull"
 # adjust_covar <- rnorm(n=40)
 # Xmat <- cbind(1, covariate, adjust_covar)
 #
+#
+#
+# # AFT model with log normal regression
+# lognormal_vanilla_result <- LRT_censored_regression(Y=neglogtime, Delta=event, X=Xmat, dist="lognormal",
+#                                                       Firth=F)
+#
+# lognormal_vanilla_hessian <- gaussian_hessian(theta=lognormal_vanilla_result$full_estim_param, Y=neglogtime, Delta=event, X=Xmat)
+# covar_lognormal_vanilla <- solve(-lognormal_vanilla_hessian)
+#
+# ## run the standard survreg for comparison
+# standard_full <- survreg(Surv(neglogtime, event, type="left") ~ covariate + adjust_covar, dist="gaussian")
+# ## verify coefficient estimate
+# stopifnot(abs(lognormal_vanilla_result$full_estim_param[1:3] - standard_full$coefficients) < 1e-3)
+# ## verify variance estimate
+# stopifnot(abs(diag(covar_lognormal_vanilla) - diag(standard_full$var)) < 1e-3)
+# standard_reduced <- survreg(Surv(neglogtime, event, type="left") ~ adjust_covar, dist="gaussian")
+# standard_LRTtest <- anova(standard_reduced, standard_full)
+# ## verify p value
+# stopifnot(abs(standard_LRTtest$`Pr(>Chi)`[2] - lognormal_vanilla_result$pval) < 1e-3)
+#
+# lognormal_firth_result <- LRT_censored_regression(Y=neglogtime, Delta=event, X=Xmat, dist="lognormal",
+#                                                     Firth=T)
 #
 #
 #
@@ -285,5 +367,5 @@ LRT_censored_regression <- function(Y, Delta, X, dist=c("loglogistic", "weibull"
 #
 # weibull_firth_result <- LRT_censored_regression(Y=neglogtime, Delta=event, X=Xmat, dist="weibull",
 #                                                 Firth=T)
-
+#
 

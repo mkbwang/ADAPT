@@ -9,7 +9,8 @@
 #' @param prevalence_cutoff features whose prevalence are smaller than the cutoff will be excluded from analysis
 #' @param depth_cutoff a sample would be discarded if its sequencing depth is smaller than the threshold
 #' @param features_are_rows whether the microbiome features are on the column or the row of the abundance table
-#' @param ratio_model the censored regression model for the count ratios. loglogistic or weibull
+#' @param ratio_model the censored regression model for the count ratios. lognormal, loglogistic or weibull
+#' @param zero_censor the nonzero value to replace zeros when calculating censored count ratios, default 1
 #' @param firth whether to add firth penalty to the likelihood
 #' @param alpha the cutoff of the adjusted p values
 #' @importFrom ClassComparison Bum
@@ -20,7 +21,7 @@
 #' @export
 polda <- function(otu_table, metadata, covar, adjust=NULL,
                   prevalence_cutoff=0.1, depth_cutoff=1000, features_are_rows=TRUE,
-                  ratio_model = c("loglogistic", "weibull"), firth=T,
+                  ratio_model = c("lognormal", "loglogistic", "weibull"), zero_censor=1,  firth=T,
                   alpha=0.05){
 
   if(!features_are_rows) otu_table <- t(otu_table)
@@ -33,7 +34,7 @@ polda <- function(otu_table, metadata, covar, adjust=NULL,
   while(1){
     relabd_result <- CR_count_ratio(count_data = otu_table_filtered, metadata = metadata,
                                     covar=covar, adjust=adjust, reftaxa = reftaxa, complement=FALSE,
-                                    ratio_model=ratio_model, firth=firth)
+                                    ratio_model=ratio_model, zero_censor=zero_censor, firth=firth)
 
     estimated_effect <- relabd_result$effect
     pvals <- relabd_result$pval

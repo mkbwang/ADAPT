@@ -6,7 +6,7 @@ test_that("null case", {
   count_mat <- null_example$count_mat
   polda_null <- polda(otu_table=count_mat,
                         metadata=metadata,
-                        covar="X", ratio_model="loglogistic")
+                        covar="X", ratio_model="lognormal", zero_censor=1)
   polda_pvals <- polda_null$P_Value
   FPR <- mean(polda_pvals$pval < 0.05)
 
