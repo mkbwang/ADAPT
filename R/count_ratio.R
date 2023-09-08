@@ -11,6 +11,7 @@
 #' @param ratio_model Use lognormal, loglogistic model or the Weibull model to model count ratios with excessive zeros
 #' @param zero_censor the nonzero value to replace zeros when calculating censored count ratios, default 1
 #' @param firth whether to add firth penalty to the likelihood
+#' @param pen penalty coefficient, default 0.5
 #' @importFrom parallelly availableCores
 #' @importFrom parallel makeCluster
 #' @importFrom doParallel registerDoParallel
@@ -23,8 +24,8 @@
 #' @importFrom stats var
 #' @returns The effect sizes, standard errors and p values for each taxon
 #' @export
-CR_count_ratio <- function(count_data, metadata, covar, adjust=NULL, reftaxa=NULL, complement=FALSE,
-                        ratio_model=c("lognormal", "loglogistic", "weibull"), zero_censor=1, firth=T){
+count_ratio <- function(count_data, metadata, covar, adjust=NULL, reftaxa=NULL, complement=FALSE,
+                        ratio_model=c("lognormal", "loglogistic"), zero_censor=1, firth=T, pen=0.5){
   alltaxa <- rownames(count_data)
   if (is.null(reftaxa)) reftaxa <- alltaxa
   TBDtaxa <- NULL
@@ -65,7 +66,7 @@ CR_count_ratio <- function(count_data, metadata, covar, adjust=NULL, reftaxa=NUL
                        design_matrix <- cbind(1, metadata[, c(covar, adjust)])
 
                        LRT_result <- LRT_censored_regression(Y=logratios, Delta=existence, X=as.matrix(design_matrix),
-                                                             dist=ratio_model, Firth=firth)
+                                                             dist=ratio_model, Firth=firth, pen=pen)
 
                        beta_estimate <- LRT_result$full_estim_param[2] |> unname()
                        teststat_beta <- LRT_result$teststat

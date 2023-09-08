@@ -12,6 +12,7 @@
 #' @param ratio_model the censored regression model for the count ratios. lognormal, loglogistic or weibull
 #' @param zero_censor the nonzero value to replace zeros when calculating censored count ratios, default 1
 #' @param firth whether to add firth penalty to the likelihood
+#' @param pen penalty coefficient for log likelihood, default 0.5
 #' @param alpha the cutoff of the adjusted p values
 #' @importFrom ClassComparison Bum
 #' @importFrom ClassComparison likelihoodBum
@@ -21,7 +22,7 @@
 #' @export
 polda <- function(otu_table, metadata, covar, adjust=NULL,
                   prevalence_cutoff=0.1, depth_cutoff=1000, features_are_rows=TRUE,
-                  ratio_model = c("lognormal", "loglogistic", "weibull"), zero_censor=1,  firth=T,
+                  ratio_model = c("lognormal", "loglogistic"), zero_censor=1,  firth=T, pen=0.5,
                   alpha=0.05){
 
   if(!features_are_rows) otu_table <- t(otu_table)
@@ -32,9 +33,9 @@ polda <- function(otu_table, metadata, covar, adjust=NULL,
   taxa_names <- row.names(otu_table_filtered)
   reftaxa <- taxa_names # initially all the taxa are reference taxa(relative abundance)
   while(1){
-    relabd_result <- CR_count_ratio(count_data = otu_table_filtered, metadata = metadata,
+    relabd_result <- count_ratio(count_data = otu_table_filtered, metadata = metadata,
                                     covar=covar, adjust=adjust, reftaxa = reftaxa, complement=FALSE,
-                                    ratio_model=ratio_model, zero_censor=zero_censor, firth=firth)
+                                    ratio_model=ratio_model, zero_censor=zero_censor, firth=firth, pen=pen)
 
     estimated_effect <- relabd_result$effect
     pvals <- relabd_result$pval
@@ -58,9 +59,9 @@ polda <- function(otu_table, metadata, covar, adjust=NULL,
 
   if (length(reftaxa) < length(taxa_names)){
     # Fit overdispersed GLM for all the other taxa outside reference set
-    complement_result <- CR_count_ratio(count_data = otu_table_filtered, metadata = metadata,
+    complement_result <- count_ratio(count_data = otu_table_filtered, metadata = metadata,
                                        covar=covar, adjust=adjust, reftaxa = reftaxa, complement=TRUE,
-                                       ratio_model=ratio_model, firth=firth)
+                                       ratio_model=ratio_model, firth=firth, pen=pen)
     # combine p values for all the taxa
     all_CR_results <- rbind(relabd_result, complement_result)
   } else{ # relative abundance is good enough for DAA

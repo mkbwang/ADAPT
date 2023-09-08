@@ -12,9 +12,10 @@ polda(
   prevalence_cutoff = 0.1,
   depth_cutoff = 1000,
   features_are_rows = TRUE,
-  ratio_model = c("lognormal", "loglogistic", "weibull"),
+  ratio_model = c("lognormal", "loglogistic"),
   zero_censor = 1,
   firth = T,
+  pen = 0.5,
   alpha = 0.05
 )
 }
@@ -38,6 +39,8 @@ polda(
 \item{zero_censor}{the nonzero value to replace zeros when calculating censored count ratios, default 1}
 
 \item{firth}{whether to add firth penalty to the likelihood}
+
+\item{pen}{penalty coefficient for log likelihood, default 0.5}
 
 \item{alpha}{the cutoff of the adjusted p values}
 }
