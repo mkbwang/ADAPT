@@ -14,8 +14,6 @@
 #' @param firth whether to add firth penalty to the likelihood
 #' @param pen penalty coefficient for log likelihood, default 0.5
 #' @param alpha the cutoff of the adjusted p values
-#' @importFrom ClassComparison Bum
-#' @importFrom ClassComparison likelihoodBum
 #' @importFrom stats median
 #' @importFrom stats p.adjust
 #' @returns the reference feature set, the identified DA features and the p values for all the features
@@ -42,11 +40,8 @@ polda <- function(otu_table, metadata, covar, adjust=NULL,
     names(pvals) <- relabd_result$Taxon
     names(estimated_effect) <- relabd_result$Taxon
     # check distribution of p values
-    bumfit <- Bum(pvals)
-    lambda_hat <- bumfit@lhat
-    a_hat <- bumfit@ahat
-    # check if the sum of log likelihood is larger than 4 (AIC checking)
-    loglik <- sum(log(likelihoodBum(bumfit)))
+    bumfit <- BUM_fit(pvals)
+    loglik <- BUM_llk(bumfit$estim_params, pvals)
     if (loglik > 2){ # need to continue shrinking reference taxa set
       distance2med <- abs(estimated_effect - median(estimated_effect))
       sorted_distance <- sort(distance2med)

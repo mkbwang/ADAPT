@@ -2,8 +2,6 @@
 
 export(count_ratio)
 export(polda)
-importFrom(ClassComparison,Bum)
-importFrom(ClassComparison,likelihoodBum)
 importFrom(doParallel,registerDoParallel)
 importFrom(foreach,"%dopar%")
 importFrom(foreach,foreach)
