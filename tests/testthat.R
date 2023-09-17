@@ -1,4 +1,4 @@
 library(testthat)
-library(POLDA)
+library(PTDA)
 
-test_check("POLDA")
+test_check("PTDA")

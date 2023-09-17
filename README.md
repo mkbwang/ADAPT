@@ -1,3 +1,3 @@
-# POLDA
+# PTDA
 
-POLDA: Pooling Overdispersed Logistic Regressions for Microbiome Differential Abundance Analysis
+PTDA: Pooling Tobit Models for Microbiome Differential Abundance Analysis

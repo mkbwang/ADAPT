@@ -1,6 +1,6 @@
-Package: POLDA
-Title: POLDA: Pooling overdispersed logistic regressions for microbiome differential abundance analysis
-Version: 0.0.1
+Package: PTDA
+Title: PTDA: Pooling Tobit Models for microbiome differential abundance analysis
+Version: 0.1.0
 Authors@R: 
     person("Mukai", "Wang", email="mkbobbywang@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-1413-1904"))

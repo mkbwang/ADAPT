@@ -1,6 +1,6 @@
 
 
-#' Pooling overdispersed logistic regressions for microbiome differential abundance analysis
+#' Pooling Tobit Models for microbiome differential abundance analysis
 #'
 #' @param otu_table microbiome abundance table generated from 16S rRNA sequencing or shotgun metagenomic sequencing. All entries are integers
 #' @param metadata sample metadata dataframe
@@ -18,7 +18,7 @@
 #' @importFrom stats p.adjust
 #' @returns the reference feature set, the identified DA features and the p values for all the features
 #' @export
-polda <- function(otu_table, metadata, covar, adjust=NULL,
+ptda <- function(otu_table, metadata, covar, adjust=NULL,
                   prevalence_cutoff=0.1, depth_cutoff=1000, features_are_rows=TRUE,
                   ratio_model = c("lognormal", "loglogistic"), zero_censor=1,  firth=T, pen=0.5,
                   alpha=0.05){
