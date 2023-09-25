@@ -12,9 +12,18 @@ RoxygenNote: 7.2.3
 Imports: 
     doParallel (>= 1.0.17),
     foreach (>= 1.5.2),
-    parallelly (>= 1.32.1)
+    parallelly (>= 1.32.1),
+    nloptr,
+    Rcpp,
+    RcppArmadillo,
+    RcppParallel
 Suggests: 
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
+LinkingTo:
+    Rcpp,
+    RcppArmadillo,
+    RcppParallel,
+    nloptr
 Depends: 
     R (>= 2.10)
