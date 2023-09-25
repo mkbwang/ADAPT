@@ -1,7 +1,7 @@
 
 
 #' Censored Regression for Count Ratios
-#'
+#' @useDynLib PTDA
 #' @param count_data microbiome abundance matrix. All entries are integers
 #' @param metadata sample metadata containing the covariate of interest and confounding factors for adjustment
 #' @param covar the name of the covariate of interest
@@ -22,6 +22,10 @@
 #' @importFrom stats optim
 #' @importFrom stats pchisq
 #' @importFrom stats var
+#' @import nloptr
+#' @importFrom Rcpp sourceCpp
+#' @import RcppArmadillo
+#' @import RcppParallel
 #' @returns The effect sizes, standard errors and p values for each taxon
 #' @export
 count_ratio <- function(count_data, metadata, covar, adjust=NULL, reftaxa=NULL, complement=FALSE,

@@ -1,7 +1,7 @@
 
 
 #' Pooling Tobit Models for microbiome differential abundance analysis
-#'
+#' @useDynLib PTDA
 #' @param otu_table microbiome abundance table generated from 16S rRNA sequencing or shotgun metagenomic sequencing. All entries are integers
 #' @param metadata sample metadata dataframe
 #' @param covar the name of the covariate of interest
@@ -16,6 +16,10 @@
 #' @param alpha the cutoff of the adjusted p values
 #' @importFrom stats median
 #' @importFrom stats p.adjust
+#' @import nloptr
+#' @importFrom Rcpp sourceCpp
+#' @import RcppArmadillo
+#' @import RcppParallel
 #' @returns the reference feature set, the identified DA features and the p values for all the features
 #' @export
 ptda <- function(otu_table, metadata, covar, adjust=NULL,

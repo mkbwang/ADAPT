@@ -3,35 +3,36 @@
 #include <RcppArmadillo.h>
 #include <nloptrAPI.h>
 
-
+// [[Rcpp::depends(RcppArmadillo)]]
+using namespace arma;
 
 #ifndef TOBIT_H
 #define TOBIT_H
 
 //TODO: constructor
 struct tobitinput{
-  arma::vec Y; // log count ratio
-  arma::Col<int> Delta; // censorship
-  arma::mat X; // covariate arma::matrix
+  vec Y; // log count ratio
+  Col<int> Delta; // censorship
+  mat X; // covariate matrix
   tobitinput() = default;
-  tobitinput(const arma::vec &dependent_vec,const arma::Col<int> &censor_vec,const arma::mat &covar_mat):
+  tobitinput(const vec &dependent_vec,const Col<int> &censor_vec,const mat &covar_mat):
     Y(dependent_vec), Delta(censor_vec), X(covar_mat){}
 };
 
 
 //TODO: constructor
 struct tobitoutput{
-  arma::vec params; // estiarma::mated parameter
+  vec params; // estimated parameter
   double llk; // log likelihood
   nlopt_result status; // optimization status
-  tobitoutput(const arma::vec &estimate, double maxllk, nlopt_result outcome):
+  tobitoutput(const vec &estimate, double maxllk, nlopt_result outcome):
     params(estimate), llk(maxllk), status(outcome){}
 };
 
 // tobit loglikelihood function
 double tobitllk(unsigned ndim, const double* params, double* grad, void* input);
 
-// tobit estiarma::mation
-tobitoutput estimation(void *input, bool null=false);
+// tobit estimation
+tobitoutput estimation(void *input, bool isnull=false);
 
 #endif //TOBIT_H

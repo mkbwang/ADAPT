@@ -13,7 +13,7 @@ Imports:
     doParallel (>= 1.0.17),
     foreach (>= 1.5.2),
     parallelly (>= 1.32.1),
-    nloptr,
+    nloptr (>= 1.2.0),
     Rcpp,
     RcppArmadillo,
     RcppParallel
@@ -24,6 +24,6 @@ LinkingTo:
     Rcpp,
     RcppArmadillo,
     RcppParallel,
-    nloptr
+    nloptr (>= 1.2.0)
 Depends: 
-    R (>= 2.10)
+    R (>= 3.0.2)
