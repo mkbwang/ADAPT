@@ -35,21 +35,19 @@ tobitoutput estimation(void *input, bool isnull){
 
   // optimization object
   nlopt_opt opt = nlopt_create(NLOPT_LD_MMA, n_dim);
-  vec lower_bounds(n_dim, -datum::inf);
-  vec upper_bounds(n_dim, +datum::inf);
-  // nlopt_set_lower_bound(opt, n_dim-1, 0); // the inverse scale parameter is positive
+  std::vector<double> lower_bounds(n_dim, -HUGE_VAL);
+  std::vector<double> upper_bounds(n_dim, +HUGE_VAL);
   if (isnull) { // fitting isnull model
-    lower_bounds(1) = 0;
-    upper_bounds(1) = 0;
+    lower_bounds[1] = 0;
+    upper_bounds[1] = 0;
   }
-  double *lb_pt = lower_bounds.memptr();
-  double *ub_pt = upper_bounds.memptr();
-  nlopt_set_lower_bounds(opt, lb_pt);
-  nlopt_set_upper_bounds(opt, ub_pt);
-
+  nlopt_set_lower_bounds(opt, &lower_bounds[0]);
+  nlopt_set_upper_bounds(opt, &upper_bounds[0]);
 
   nlopt_set_max_objective(opt, tobitllk, input);
-  nlopt_set_xtol_rel(opt, 1e-4);
+  nlopt_set_ftol_rel(opt, 5e-4);
+  nlopt_set_ftol_abs(opt, 5e-3);
+  nlopt_set_maxeval(opt, 40);
   // set up the parameter vector to estimate
   vec param_estimate(n_dim, fill::zeros);
   param_estimate(0) = mean(inputdata->Y)/stddev(inputdata->Y); // initialize the intercept

@@ -12,23 +12,24 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // cr_lrt
-NumericMatrix cr_lrt(arma::mat& Y, arma::Mat<int>& Delta, arma::mat& X, size_t n_gene, size_t n_sample);
-RcppExport SEXP _PTDA_cr_lrt(SEXP YSEXP, SEXP DeltaSEXP, SEXP XSEXP, SEXP n_geneSEXP, SEXP n_sampleSEXP) {
+NumericMatrix cr_lrt(arma::mat& Y, arma::mat& Delta, arma::mat& X, size_t n_gene, size_t n_sample, size_t n_boot);
+RcppExport SEXP _PTDA_cr_lrt(SEXP YSEXP, SEXP DeltaSEXP, SEXP XSEXP, SEXP n_geneSEXP, SEXP n_sampleSEXP, SEXP n_bootSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< arma::mat& >::type Y(YSEXP);
-    Rcpp::traits::input_parameter< arma::Mat<int>& >::type Delta(DeltaSEXP);
+    Rcpp::traits::input_parameter< arma::mat& >::type Delta(DeltaSEXP);
     Rcpp::traits::input_parameter< arma::mat& >::type X(XSEXP);
     Rcpp::traits::input_parameter< size_t >::type n_gene(n_geneSEXP);
     Rcpp::traits::input_parameter< size_t >::type n_sample(n_sampleSEXP);
-    rcpp_result_gen = Rcpp::wrap(cr_lrt(Y, Delta, X, n_gene, n_sample));
+    Rcpp::traits::input_parameter< size_t >::type n_boot(n_bootSEXP);
+    rcpp_result_gen = Rcpp::wrap(cr_lrt(Y, Delta, X, n_gene, n_sample, n_boot));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_PTDA_cr_lrt", (DL_FUNC) &_PTDA_cr_lrt, 5},
+    {"_PTDA_cr_lrt", (DL_FUNC) &_PTDA_cr_lrt, 6},
     {NULL, NULL, 0}
 };
 

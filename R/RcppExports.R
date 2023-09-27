@@ -2,7 +2,7 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 #' @export
-cr_lrt <- function(Y, Delta, X, n_gene, n_sample) {
-    .Call('_PTDA_cr_lrt', PACKAGE = 'PTDA', Y, Delta, X, n_gene, n_sample)
+cr_lrt <- function(Y, Delta, X, n_gene, n_sample, n_boot = 1000L) {
+    .Call('_PTDA_cr_lrt', PACKAGE = 'PTDA', Y, Delta, X, n_gene, n_sample, n_boot)
 }
 

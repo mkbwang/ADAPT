@@ -12,10 +12,10 @@ using namespace arma;
 //TODO: constructor
 struct tobitinput{
   vec Y; // log count ratio
-  Col<int> Delta; // censorship
+  vec Delta; // censorship
   mat X; // covariate matrix
-  tobitinput() = default;
-  tobitinput(const vec &dependent_vec,const Col<int> &censor_vec,const mat &covar_mat):
+
+  tobitinput(const vec &dependent_vec,const vec &censor_vec,const mat &covar_mat):
     Y(dependent_vec), Delta(censor_vec), X(covar_mat){}
 };
 
