@@ -19,11 +19,17 @@ cpptobittest <- function(ngene=120, nsample=50, n_boot=500, prev=0.5, nthread=8,
   X2 <- rnorm(nsample)
   Xmat <- cbind(1, X1, X2)
   setThreadOptions(numThreads = nthread)
+
   ptm <- proc.time()
-  inference_result <- cr_lrt(Ymat, observed, Xmat, ngene, nsample, n_boot)
-  duration <- proc.time() - ptm
+  inference_result <- cr_estim(Ymat, observed, Xmat)
+  inference_duration <- proc.time() - ptm
+
+  ptm <- proc.time()
+  boot_result <- boot_estim(Ymat, observed, Xmat, boot_replicate=n_boot)
+  boot_duration <- proc.time() - ptm
 
   return(list(Ymat=Ymat, Xmat=Xmat, Dmat=observed,
-              result=inference_result, duration=duration))
+              inference_result=inference_result, inference_duration=inference_duration,
+              boot_result=boot_result, boot_duration=boot_duration))
 }
 
