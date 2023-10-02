@@ -61,6 +61,10 @@ double tobitllk_firth(unsigned ndim, const double* params, double* grad, void* i
   information(span(0, ndim-2), ndim-1) = - inputdata->X.t() * (neg_deriv_z2 % inputdata->Y);
   information(ndim-1, span(0, ndim-2)) = information(span(0, ndim-2), ndim-1).as_row();
 
+  if (!information.is_sympd()){ // keep an eye on possible numerical issues
+    throw std::overflow_error("Ill formed information matrix");
+  }
+
   mat inv_information = inv_sympd(information);
 
   // negative 3rd derivative of log likelihood over z
@@ -105,11 +109,11 @@ tobitoutput estimation(void *input, bool null){
   }
   nlopt_set_lower_bounds(opt, &lower_bounds[0]);
   nlopt_set_upper_bounds(opt, &upper_bounds[0]);
-
+  nlopt_set_maxeval(opt, 40);
   nlopt_set_max_objective(opt, tobitllk_firth, input);
   nlopt_set_ftol_rel(opt, 1e-4);
-  nlopt_set_ftol_abs(opt, 1e-7);
-  nlopt_set_vector_storage(opt, 3); // specific for L-BFGS, number of past gradients
+  nlopt_set_ftol_abs(opt, 1e-5);
+  nlopt_set_vector_storage(opt, 5); // specific for L-BFGS, number of past gradients
   // set up the parameter vector to estimate
   vec param_estimate(n_dim, fill::zeros);
   param_estimate(0) = mean(inputdata->Y)/stddev(inputdata->Y); // initialize the intercept

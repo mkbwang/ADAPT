@@ -29,16 +29,20 @@ struct CRestimate: public RcppParallel::Worker
   void operator()(size_t begin, size_t end){
 
     for(size_t j=begin; j<end;j++){
-      vec yvec= Y.col(j); // assume that rows are genes and cols are samples
-      vec delta_vec = Delta.col(j);
+      try{
+        vec yvec= Y.col(j); // assume that rows are genes and cols are samples
+        vec delta_vec = Delta.col(j);
 
-      // first cary out estimation using the real data
-      tobitinput  singleinput(yvec, delta_vec, X);
-      tobitoutput full_estimates = estimation(&singleinput, false);
-      tobitoutput null_estimates = estimation(&singleinput, true);
-      results(j, 0) = full_estimates.params(1);
-      double real_teststat = 2*(full_estimates.llk - null_estimates.llk);
-      results(j, 1) = real_teststat;
+        // first cary out estimation using the real data
+        tobitinput  singleinput(yvec, delta_vec, X);
+        tobitoutput full_estimates = estimation(&singleinput, false);
+        tobitoutput null_estimates = estimation(&singleinput, true);
+        results(j, 0) = full_estimates.params(1);
+        double real_teststat = 2*(full_estimates.llk - null_estimates.llk);
+        results(j, 1) = real_teststat;
+      }catch(std::overflow_error& err){
+        results(j, 2) = 1;
+      }
     }
   }
 };
@@ -63,21 +67,26 @@ struct scaleestimate: public RcppParallel::Worker{
   void operator()(size_t begin, size_t end){
 
     for(size_t j=begin; j<end;j++){
-      vec yvec= Y.col(j); // assume that rows are genes and cols are samples
-      vec delta_vec = Delta.col(j);
+        vec yvec= Y.col(j); // assume that rows are genes and cols are samples
+        vec delta_vec = Delta.col(j);
 
-      vec teststat(n_boot, fill::zeros);
-      tobitinput boot_input(yvec, delta_vec, X);
-      for (unsigned int k=0; k<n_boot; k++){
-        Col<uword> selected_indices = randi<uvec>(n_sample, distr_param(0, n_sample-1));
-        boot_input.Y = yvec.elem(selected_indices);
-        boot_input.Delta = delta_vec.elem(selected_indices);
-        tobitoutput boot_full_estimates = estimation(&boot_input, false);
-        tobitoutput boot_null_estimates = estimation(&boot_input, true);
-        teststat(k) = 2*(boot_full_estimates.llk - boot_null_estimates.llk);
-      }
+        vec teststat(n_boot, fill::zeros);
+        vec failure(n_boot, fill::zeros); // numerical failure indicator
+        tobitinput boot_input(yvec, delta_vec, X);
+        for (unsigned int k=0; k<n_boot; k++){
+          try{
+            Col<uword> selected_indices = randi<uvec>(n_sample, distr_param(0, n_sample-1));
+            boot_input.Y = yvec.elem(selected_indices);
+            boot_input.Delta = delta_vec.elem(selected_indices);
+            tobitoutput boot_full_estimates = estimation(&boot_input, false);
+            tobitoutput boot_null_estimates = estimation(&boot_input, true);
+            teststat(k) = 2*(boot_full_estimates.llk - boot_null_estimates.llk);
+          } catch(std::overflow_error& err){
+            failure(k) = 1;
+          }
+        }
 
-      scale_results(j, 1) = mean(teststat);
+        scale_results(j, 1) = mean(teststat(find(failure == 0)));
     }
   }
 
@@ -89,7 +98,7 @@ struct scaleestimate: public RcppParallel::Worker{
 NumericMatrix cr_estim(arma::mat& Y, arma::mat& Delta, arma::mat& X) {
 
   size_t n_gene = Y.n_cols;
-  NumericMatrix statinference(n_gene, 2);
+  NumericMatrix statinference(n_gene, 3);
   CRestimate cr_obj(Y, Delta, X, statinference);
   parallelFor(0, n_gene, cr_obj, 20);
   return statinference;
@@ -103,7 +112,8 @@ NumericMatrix boot_estim(arma::mat& Y, arma::mat& Delta, arma::mat& X, size_t bo
 
   size_t n_gene = Y.n_cols;
   size_t n_selected_gene = (n_gene > n_boot_gene)? n_boot_gene : n_gene; // number of subset of genes
-  NumericMatrix scale_chisq(n_selected_gene, 2); // store the results. First column is the gene indices. Second column is the estimates
+  // store the results. First column is the gene indices. Second column is the estimates.
+  NumericMatrix scale_chisq(n_selected_gene, 2);
   uvec indices = (n_gene > n_boot_gene)? randperm(n_gene, n_selected_gene) : linspace<uvec>(0, n_gene-1, n_gene);
   scale_chisq(_, 0) = as<NumericVector>(wrap(indices));
   mat subset_Y = Y.cols(indices);
@@ -112,8 +122,10 @@ NumericMatrix boot_estim(arma::mat& Y, arma::mat& Delta, arma::mat& X, size_t bo
   scaleestimate chisq_estimate(subset_Y, subset_Delta, X, boot_replicate, scale_chisq);
   parallelFor(0, n_selected_gene, chisq_estimate, 20);
 
-  return scale_chisq;
+  // add indices by one for exporting to R
+  scale_chisq(_, 0) = scale_chisq(_, 0) + 1;
 
+  return scale_chisq;
 }
 
 
