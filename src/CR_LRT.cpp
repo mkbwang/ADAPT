@@ -93,7 +93,7 @@ struct scaleestimate: public RcppParallel::Worker{
 };
 
 
-//' @export
+
 // [[Rcpp::export]]
 NumericMatrix cr_estim(arma::mat& Y, arma::mat& Delta, arma::mat& X) {
 
@@ -106,9 +106,9 @@ NumericMatrix cr_estim(arma::mat& Y, arma::mat& Delta, arma::mat& X) {
 }
 
 
-//' @export
+
 // [[Rcpp::export]]
-NumericMatrix boot_estim(arma::mat& Y, arma::mat& Delta, arma::mat& X, size_t boot_replicate=1000, size_t n_boot_gene=100){
+NumericMatrix boot_estim(arma::mat& Y, arma::mat& Delta, arma::mat& X, size_t boot_replicate=500, size_t n_boot_gene=100){
 
   size_t n_gene = Y.n_cols;
   size_t n_selected_gene = (n_gene > n_boot_gene)? n_boot_gene : n_gene; // number of subset of genes

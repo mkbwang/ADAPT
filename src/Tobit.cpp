@@ -109,15 +109,15 @@ tobitoutput estimation(void *input, bool null){
   }
   nlopt_set_lower_bounds(opt, &lower_bounds[0]);
   nlopt_set_upper_bounds(opt, &upper_bounds[0]);
-  nlopt_set_maxeval(opt, 40);
-  nlopt_set_max_objective(opt, tobitllk_firth, input);
-  nlopt_set_ftol_rel(opt, 1e-4);
+  nlopt_set_maxeval(opt, 70);
+  nlopt_set_max_objective(opt, tobitllk_vanilla, input);
+  nlopt_set_xtol_rel(opt, 1e-4);
   nlopt_set_ftol_abs(opt, 1e-5);
-  nlopt_set_vector_storage(opt, 5); // specific for L-BFGS, number of past gradients
+  nlopt_set_vector_storage(opt, 70); // specific for L-BFGS, number of past gradients
   // set up the parameter vector to estimate
   vec param_estimate(n_dim, fill::zeros);
-  param_estimate(0) = mean(inputdata->Y)/stddev(inputdata->Y); // initialize the intercept
-  param_estimate(n_dim-1) = -log(stddev(inputdata->Y)); // initialize the inverse of standard deviation
+  param_estimate(0) = mean(inputdata->Y)/stddev(inputdata->Y)/2; // initialize the intercept
+  param_estimate(n_dim-1) = -log(2*stddev(inputdata->Y)); // initialize the inverse of standard deviation
   double *param_pt = param_estimate.memptr();
   double llk; //loglikelihood
 

@@ -5,20 +5,19 @@
 \title{Censored Regression for Count Ratios}
 \usage{
 count_ratio(
-  count_data,
+  otu_table,
   metadata,
   covar,
   adjust = NULL,
-  reftaxa = NULL,
+  refgenes = NULL,
   complement = FALSE,
-  ratio_model = c("lognormal", "loglogistic"),
-  zero_censor = 1,
-  firth = T,
-  pen = 0.5
+  boot = TRUE,
+  boot_replicate = 500,
+  n_boot_gene = 100
 )
 }
 \arguments{
-\item{count_data}{microbiome abundance matrix. All entries are integers}
+\item{otu_table}{microbiome abundance matrix. All entries are integers}
 
 \item{metadata}{sample metadata containing the covariate of interest and confounding factors for adjustment}
 
@@ -26,17 +25,15 @@ count_ratio(
 
 \item{adjust}{the names of the variables for adjustment, NULL if no adjustments}
 
-\item{reftaxa}{the list of reference taxa}
+\item{refgenes}{the list of reference genes}
 
 \item{complement}{If true, model the count ratios between each taxa beyond the reference set and the sum of taxa in the reference set. If false, model the relative abundance of taxa within the reference set.}
 
-\item{ratio_model}{Use lognormal, loglogistic model or the Weibull model to model count ratios with excessive zeros}
+\item{boot}{whether to use bootstrap to estimate scaling factors for the test statistics, default TRUE}
 
-\item{zero_censor}{the nonzero value to replace zeros when calculating censored count ratios, default 1}
+\item{boot_replicate}{number of bootstrap replicates for each gene to estimate scaling factors}
 
-\item{firth}{whether to add firth penalty to the likelihood}
-
-\item{pen}{penalty coefficient, default 0.5}
+\item{n_boot_gene}{number of genes to apply bootstrap}
 }
 \value{
 The effect sizes, standard errors and p values for each taxon

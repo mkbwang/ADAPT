@@ -11,11 +11,10 @@ ptda(
   adjust = NULL,
   prevalence_cutoff = 0.1,
   depth_cutoff = 1000,
-  features_are_rows = TRUE,
-  ratio_model = c("lognormal", "loglogistic"),
-  zero_censor = 1,
-  firth = T,
-  pen = 0.5,
+  genes_are_rows = TRUE,
+  boot = TRUE,
+  boot_replicate = 500,
+  n_boot_gene = 100,
   alpha = 0.05
 )
 }
@@ -32,15 +31,13 @@ ptda(
 
 \item{depth_cutoff}{a sample would be discarded if its sequencing depth is smaller than the threshold}
 
-\item{features_are_rows}{whether the microbiome features are on the column or the row of the abundance table}
+\item{genes_are_rows}{whether the microbiome genes are on the column or the row of the abundance table}
 
-\item{ratio_model}{the censored regression model for the count ratios. lognormal, loglogistic or weibull}
+\item{boot}{whether to use bootstrap to estimate scaling factors for the test statistics, default TRUE}
 
-\item{zero_censor}{the nonzero value to replace zeros when calculating censored count ratios, default 1}
+\item{boot_replicate}{number of bootstrap replicates for each gene to estimate scaling factors}
 
-\item{firth}{whether to add firth penalty to the likelihood}
-
-\item{pen}{penalty coefficient for log likelihood, default 0.5}
+\item{n_boot_gene}{number of genes to apply bootstrap}
 
 \item{alpha}{the cutoff of the adjusted p values}
 }
