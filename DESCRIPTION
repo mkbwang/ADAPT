@@ -9,11 +9,7 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.2.3
-Imports: 
-    doParallel (>= 1.0.17),
-    foreach (>= 1.5.2),
-    parallelly (>= 1.32.1),
-    nloptr (>= 1.2.0),
+Imports:
     Rcpp,
     RcppArmadillo,
     RcppParallel
@@ -23,7 +19,6 @@ Config/testthat/edition: 3
 LinkingTo:
     Rcpp,
     RcppArmadillo,
-    RcppParallel,
-    nloptr (>= 1.2.0)
+    RcppParallel
 Depends: 
     R (>= 3.0.2)

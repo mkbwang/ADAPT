@@ -33,14 +33,27 @@ struct CRestimate: public RcppParallel::Worker
         vec yvec= Y.col(j); // assume that rows are genes and cols are samples
         vec delta_vec = Delta.col(j);
 
-        // first cary out estimation using the real data
-        tobitinput  singleinput(yvec, delta_vec, X);
-        tobitoutput full_estimates = estimation(&singleinput, false);
-        tobitoutput null_estimates = estimation(&singleinput, true);
-        results(j, 0) = full_estimates.params(1);
-        double real_teststat = 2*(full_estimates.llk - null_estimates.llk);
+        // first carry out estimation using the real data
+        tobit_firth  tbmodel{yvec, delta_vec, X, 1e-5, 50};
+        int convergence = tbmodel.fit(); // full model
+        if(convergence != 0){
+          throw std::runtime_error("Full model didn't converge");
+        }
+        vec estimates = tbmodel.return_param();
+        size_t length=estimates.n_elem;
+        vec beta = estimates.head(length-1) / estimates(length-1);
+        results(j, 0) = beta(1);
+        double full_llk = tbmodel.return_llk();
+
+        tbmodel.reset(true, {1}); // reduced model
+        convergence = tbmodel.fit();
+        if(convergence != 0){
+          throw std::runtime_error("Reduced model didn't converge");
+        }
+        double reduced_llk = tbmodel.return_llk();
+        double real_teststat = 2*(full_llk - reduced_llk);
         results(j, 1) = real_teststat;
-      }catch(std::overflow_error& err){
+      }catch(std::runtime_error& err){
         results(j, 2) = 1;
       }
     }
@@ -72,16 +85,26 @@ struct scaleestimate: public RcppParallel::Worker{
 
         vec teststat(n_boot, fill::zeros);
         vec failure(n_boot, fill::zeros); // numerical failure indicator
-        tobitinput boot_input(yvec, delta_vec, X);
+        tobit_firth tbmodel_boot{yvec, delta_vec, X, 1e-5, 50};
         for (unsigned int k=0; k<n_boot; k++){
           try{
-            Col<uword> selected_indices = randi<uvec>(n_sample, distr_param(0, n_sample-1));
-            boot_input.Y = yvec.elem(selected_indices);
-            boot_input.Delta = delta_vec.elem(selected_indices);
-            tobitoutput boot_full_estimates = estimation(&boot_input, false);
-            tobitoutput boot_null_estimates = estimation(&boot_input, true);
-            teststat(k) = 2*(boot_full_estimates.llk - boot_null_estimates.llk);
-          } catch(std::overflow_error& err){
+            tbmodel_boot.reorder(true);
+            tbmodel_boot.reset(false, {1}); // full model with bootstrapped responses
+            int convergence = tbmodel_boot.fit();
+            if(convergence != 0){
+              throw std::runtime_error("Full model didn't converge");
+            }
+            double full_llk = tbmodel_boot.return_llk();
+
+            tbmodel_boot.reset(true, {1}); // reduced model with bootstrapped responses
+            convergence = tbmodel_boot.fit();
+            if (convergence != 0){
+              throw std::runtime_error("Reduced model didn't converge");
+            }
+
+            double reduced_llk = tbmodel_boot.return_llk();
+            teststat(k) = 2*(full_llk - reduced_llk);
+          } catch(std::runtime_error& err){
             failure(k) = 1;
           }
         }

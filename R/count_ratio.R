@@ -12,7 +12,6 @@
 #' @param boot_replicate number of bootstrap replicates for each gene to estimate scaling factors
 #' @param n_boot_gene number of genes to apply bootstrap
 #' @importFrom stats pchisq
-#' @import nloptr
 #' @importFrom Rcpp sourceCpp
 #' @import RcppArmadillo
 #' @import RcppParallel
