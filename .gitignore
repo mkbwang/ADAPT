@@ -16,6 +16,8 @@
 *.out
 *.biom
 *.tsv
+*.so
+*.o
 *_Model_Summary/
 *_plots/
 archived_GLMM/

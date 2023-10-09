@@ -1,86 +1,88 @@
 
 
 #' Censored Regression for Count Ratios
-#'
-#' @param count_data microbiome abundance matrix. All entries are integers
+#' @useDynLib PTDA
+#' @param otu_table microbiome abundance matrix. All entries are integers
 #' @param metadata sample metadata containing the covariate of interest and confounding factors for adjustment
 #' @param covar the name of the covariate of interest
 #' @param adjust the names of the variables for adjustment, NULL if no adjustments
-#' @param reftaxa the list of reference taxa
-#' @param complement If true, model the count ratios between each taxa beyond the reference set and the sum of taxa in the reference set. If false, model the relative abundance of taxa within the reference set.
-#' @param ratio_model Use lognormal, loglogistic model or the Weibull model to model count ratios with excessive zeros
-#' @param zero_censor the nonzero value to replace zeros when calculating censored count ratios, default 1
-#' @param firth whether to add firth penalty to the likelihood
-#' @param pen penalty coefficient, default 0.5
-#' @importFrom parallelly availableCores
-#' @importFrom parallel makeCluster
-#' @importFrom doParallel registerDoParallel
-#' @importFrom foreach foreach
-#' @importFrom foreach %dopar%
-#' @importFrom parallel stopCluster
-#' @importFrom stats pnorm
-#' @importFrom stats optim
+#' @param refgenes the list of reference genes
+#' @param test_all If true, model the count ratios between all taxa against the reference set; otherwise, only model the relative abundance within the reference set
+#' @param boot whether to use bootstrap to estimate scaling factors for the test statistics, default TRUE
+#' @param boot_replicate number of bootstrap replicates for each gene to estimate scaling factors
+#' @param n_boot_gene number of genes to apply bootstrap
 #' @importFrom stats pchisq
-#' @importFrom stats var
+#' @importFrom stats lm
+#' @importFrom stats na.omit
+#' @importFrom Rcpp sourceCpp
+#' @import RcppArmadillo
+#' @import RcppParallel
 #' @returns The effect sizes, standard errors and p values for each taxon
 #' @export
-count_ratio <- function(count_data, metadata, covar, adjust=NULL, reftaxa=NULL, complement=FALSE,
-                        ratio_model=c("lognormal", "loglogistic"), zero_censor=1, firth=T, pen=0.5){
-  alltaxa <- rownames(count_data)
-  if (is.null(reftaxa)) reftaxa <- alltaxa
-  TBDtaxa <- NULL
-  if (complement){ # examine count ratio between other taxa and the subset
-    TBDtaxa <- setdiff(alltaxa, reftaxa)
+count_ratio <- function(otu_table, metadata, covar, adjust=NULL, refgenes=NULL, test_all=FALSE,
+                        boot=TRUE, boot_replicate=500, n_boot_gene=100){
+  allgenes <- colnames(otu_table)
+  if (is.null(refgenes)) refgenes <- allgenes
+  TBDgenes <- NULL
+  if (test_all){ # examine count ratio between other taxa and the subset
+    TBDgenes <- allgenes
   } else{ # relative abundance within the subset of taxa
-    TBDtaxa <- reftaxa
+    TBDgenes <- refgenes
   }
 
-  refcounts <- colSums(count_data[reftaxa, ])
+  depths <- rowSums(otu_table[, refgenes])
   # remove the samples with zero counts in the reference set
-  null_filter <- refcounts != 0
-  refcounts <- refcounts[null_filter]
-  TBD_counts <- count_data[TBDtaxa, null_filter, drop=FALSE]
+  null_filter <- depths != 0
+  depths <- depths[null_filter] # denominator
+  TBD_counts <- otu_table[null_filter, TBDgenes, drop=FALSE]
+  existence <- 1*(TBD_counts > 0) # indicator matrices of zero counts
+  TBD_counts[!existence] <- 1
+  prevalences <- colMeans(existence)
+  CR_mat <- log(TBD_counts / depths)
   metadata <- metadata[null_filter, ,drop=FALSE]
-  num_taxa <- length(TBDtaxa)
-  CR_result <- data.frame(Taxon = TBDtaxa,
+  design_mat <- cbind(1, metadata[, c(covar, adjust)]) |> as.matrix()
+
+
+  CR_result <- data.frame(Gene = TBDgenes,
+                          prevalence=prevalences,
                                effect=0,
                                teststat=0,
                                pval=0)
 
-  cores <- availableCores()
-  cl <- makeCluster(cores[1]-1) #not to overload your computer
-  registerDoParallel(cl)
+  estimation_result <- cr_estim(Y=CR_mat, Delta=existence, X=design_mat)
+  CR_result$effect <- estimation_result[, 1]
+  CR_result$teststat <- estimation_result[, 2]
+  CR_result$effect[estimation_result[, 3] == 1] <- NA # some rare taxa may be difficult to estimate
+  CR_result$teststat[estimation_result[, 3] == 1] <- NA # some rare taxa may be difficult to estimate
 
-  outcome <- foreach(j=1:nrow(CR_result), .combine=rbind,
-                     .inorder=FALSE) %dopar% {
+  chisq_estim_df <- NULL
+  if(boot){ # use bootstrap to estimate scaling factor
+    chisq_estim <- boot_estim(Y=CR_mat, Delta=existence, X=design_mat,
+                              boot_replicate=boot_replicate, n_boot_gene=n_boot_gene)
+    chisq_estim <- na.omit(chisq_estim)
+    scaling_factor <- mean(chisq_estim[, 2])
+    # fit linear model between log teststatistic and log prevalence to decide scaling factors
+    selected_genes <- chisq_estim[, 1]
+    selected_prevalences <- colMeans(existence[, selected_genes])
+    chisq_estim_df <- data.frame(Gene = TBDgenes[selected_genes],
+                                 teststat = chisq_estim[, 2],
+                                 prev = selected_prevalences)
+    chisq_estim_df$log_teststat <- log(chisq_estim_df$teststat)
+    chisq_estim_df$log_prev <- log(chisq_estim_df$prev)
+    regression <- lm(log_teststat ~ log_prev, data=chisq_estim_df)
+    lm_coefs <- summary(regression)$coefficients
+    scaling_factor <- mean(chisq_estim[, 2], na.rm=T) # default average
 
-                       test_taxon <- as.character(CR_result$Taxon[j])
+    if (lm_coefs[2,4] < 0.05){# scaling factors need to be different based on prevalences
+        scaling_factor <- exp(lm_coefs[1,1] + lm_coefs[2,1] * log(CR_result$prevalence))
+    }
 
-                       numerator <- TBD_counts[test_taxon, ] # the counts of taxa of interest
-                       existence <- numerator > 0
-                       logratios <- rep(0, length(numerator))
-                       logratios[existence] <- log(numerator[existence] / refcounts[existence])
-                       if (!all(existence)){
-                         logratios[!existence] <- log(zero_censor/(refcounts[!existence]))
-                       }
-                       design_matrix <- cbind(1, metadata[, c(covar, adjust)])
+    CR_result$teststat <- CR_result$teststat / scaling_factor
 
-                       LRT_result <- LRT_censored_regression(Y=logratios, Delta=existence, X=as.matrix(design_matrix),
-                                                             dist=ratio_model, Firth=firth, pen=pen)
+  }
 
-                       beta_estimate <- LRT_result$full_estim_param[2] |> unname()
-                       teststat_beta <- LRT_result$teststat
-                       pval <- LRT_result$pval
-                       estimation <- list(ID=j, effect=beta_estimate,
-                                          teststat=teststat_beta, pval=pval)
+  CR_result$pval <- 1 - pchisq(CR_result$teststat, 1)
 
-                       return(as.data.frame(estimation))
-                     }
-
-  stopCluster(cl)
-  CR_result$effect[outcome$ID] <- outcome$effect
-  CR_result$teststat[outcome$ID] <- outcome$teststat
-  CR_result$pval[outcome$ID] <- outcome$pval
-
-  return(CR_result)
+  return(list(CR_result=CR_result,
+              boot_estim=chisq_estim_df))
 }
