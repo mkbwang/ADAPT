@@ -13,7 +13,7 @@ ptda(
   depth_cutoff = 1000,
   genes_are_rows = TRUE,
   boot = TRUE,
-  boot_replicate = 500,
+  boot_replicate = 1000,
   n_boot_gene = 100,
   alpha = 0.05
 )

@@ -20,7 +20,7 @@
 #' @export
 ptda <- function(otu_table, metadata, covar, adjust=NULL,
                  prevalence_cutoff=0.1, depth_cutoff=1000, genes_are_rows=TRUE,
-                 boot=TRUE, boot_replicate=500, n_boot_gene=100, alpha=0.05){
+                 boot=TRUE, boot_replicate=1000, n_boot_gene=100, alpha=0.05){
 
   if(genes_are_rows) otu_table <- t(otu_table)
 
@@ -30,11 +30,12 @@ ptda <- function(otu_table, metadata, covar, adjust=NULL,
   otu_table_filtered <- otu_table[depths > depth_cutoff, prevalences > prevalence_cutoff]
   gene_names <- colnames(otu_table_filtered)
   refgenes <- gene_names # initially all the taxa are reference taxa(relative abundance)
+  # cat("Selecting Reference Set...")
   while(1){
-    relabd_result <- count_ratio(otu_table = otu_table_filtered, metadata = metadata,
-                                  covar=covar, adjust=adjust, refgenes = refgenes, complement=FALSE,
-                                 boot=boot, boot_replicate=boot_replicate, n_boot_gene=n_boot_gene)
-
+    relabd_output <- count_ratio(otu_table = otu_table_filtered, metadata = metadata,
+                                  covar=covar, adjust=adjust, refgenes = refgenes, test_all=FALSE,
+                                 boot=F, boot_replicate=boot_replicate, n_boot_gene=n_boot_gene)
+    relabd_result <- relabd_output$CR_result
     estimated_effect <- relabd_result$effect
     pvals <- relabd_result$pval
     names(pvals) <- relabd_result$Gene
@@ -47,29 +48,24 @@ ptda <- function(otu_table, metadata, covar, adjust=NULL,
       sorted_distance <- sort(distance2med)
       ordered_genenames <- names(sorted_distance)
       refgenes <- ordered_genenames[1:(length(ordered_genenames)/2)]
+      # cat("Shrink Reference Set...")
     } else{
       break
     }
   }
-
-  if (length(refgenes) < length(gene_names)){
-    # Fit overdispersed GLM for all the other taxa outside reference set
-    complement_result <- count_ratio(otu_table = otu_table_filtered, metadata = metadata,
-                                     covar=covar, adjust=adjust, refgenes = refgenes, complement=TRUE,
-                                     boot=boot, boot_replicate=boot_replicate, n_boot_gene=n_boot_gene)
-    # combine p values for all the taxa
-    all_CR_results <- rbind(relabd_result, complement_result)
-  } else{ # relative abundance is good enough for DAA
-    all_CR_results <- relabd_result
-  }
+  # cat("Reference Set Selected, model count ratio of all the genes against reference set ...")
+    # after finding the reference set, model the count ratios of all the genes against the reference set
+  final_output <- count_ratio(otu_table = otu_table_filtered, metadata = metadata,
+                              covar=covar, adjust=adjust, refgenes = refgenes, test_all=T,
+                              boot=boot, boot_replicate=boot_replicate, n_boot_gene=n_boot_gene)
+  all_CR_results <- final_output$CR_result
 
   all_pvals <- all_CR_results$pval
   names(all_pvals) <- all_CR_results$Gene
   # find p value cutoff for 0.05 FDR
   all_adjusted_pvals <- p.adjust(all_pvals, method="BH")
   all_CR_results$adjusted_pval <- all_adjusted_pvals
-  # bumfit <- Bum(all_pvals)
-  # p_cutoff <- cutoffSignificant(bumfit, alpha=0.05, by="FDR")
+
   significant_pvals <- all_adjusted_pvals[all_adjusted_pvals < alpha & !is.na(all_adjusted_pvals)]
   if (length(significant_pvals) > 0){
     DiffGene <- names(significant_pvals)

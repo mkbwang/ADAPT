@@ -10,7 +10,7 @@ count_ratio(
   covar,
   adjust = NULL,
   refgenes = NULL,
-  complement = FALSE,
+  test_all = FALSE,
   boot = TRUE,
   boot_replicate = 500,
   n_boot_gene = 100
@@ -27,7 +27,7 @@ count_ratio(
 
 \item{refgenes}{the list of reference genes}
 
-\item{complement}{If true, model the count ratios between each taxa beyond the reference set and the sum of taxa in the reference set. If false, model the relative abundance of taxa within the reference set.}
+\item{test_all}{If true, model the count ratios between all taxa against the reference set; otherwise, only model the relative abundance within the reference set}
 
 \item{boot}{whether to use bootstrap to estimate scaling factors for the test statistics, default TRUE}
 

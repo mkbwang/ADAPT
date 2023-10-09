@@ -1,20 +1,40 @@
 
 rm(list=ls())
-load("R/sysdata.rda")
+# load("R/sysdata.rda")
 
-count_mat <- simulated_null_data$otu_table
-metadata <- simulated_null_data$metadata
+folder <- "experiment/sim_example_enrich"
+seed <- 3
+simulated_data <- readRDS(file.path(folder, sprintf("seed_%d", seed),
+                                    sprintf("sim_n100_p10_d100000_f3.0_s%d.rds", seed)))
+
+
+
+count_mat <- simulated_data$count_mat
+prevalences <- rowMeans(count_mat > 0)
+count_mat <- count_mat[prevalences > 0.05, ]
+metadata <- simulated_data$sample_metadata
+taxa_info <- simulated_data$taxa_info
+true_DAtaxa <- rownames(taxa_info)[taxa_info$Logfold != 0]
 
 result1_noboot <- ptda(otu_table = count_mat, metadata=metadata,
-               covar="X1", genes_are_rows = TRUE, boot=F)
-
-result1_boot <- ptda(otu_table = count_mat, metadata=metadata,
-                     covar="X1", genes_are_rows = TRUE, boot=T)
-
-result2_noboot <- ptda(otu_table = count_mat, metadata=metadata,
-                       covar="X1", adjust="X2", genes_are_rows = TRUE, boot=F)
+               covar="Group", genes_are_rows = TRUE, boot=F, prevalence_cutoff = 0.05)
+pval_df_noboot <- result1_noboot$P_Value
 
 ptm <- proc.time()
-result2_boot <- ptda(otu_table = count_mat, metadata=metadata,
-                     covar="X1", adjust="X2", genes_are_rows = TRUE, boot=T)
+result1_boot <- ptda(otu_table = count_mat, metadata=metadata,
+                     covar="Group", genes_are_rows = TRUE, boot=T, prevalence_cutoff = 0.05,
+                     n_boot_gene=100)
 proc.time() - ptm
+
+pval_df_boot <- result1_boot$P_Value
+count_mat <- t(count_mat)
+FP_noboot <- result1_noboot$DA_Gene[which(!(result1_noboot$DA_Gene %in% true_DAtaxa))]
+FP_boot <- result1_boot$DA_Gene[which(!(result1_boot$DA_Gene %in% true_DAtaxa))]
+
+extrataxa <- setdiff(result1_boot$DA_Gene, result1_noboot$DA_Gene)
+counts_FP <- count_mat[, FP_boot]
+colMeans(counts_FP > 0)
+counts_extra <- count_mat[, extrataxa]
+library(dplyr)
+View(pval_df_boot %>% filter(Gene %in% FP_boot))
+
