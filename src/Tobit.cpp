@@ -36,7 +36,7 @@ void tobit_vanilla::reset(bool reduced, uvec null_indices){
 void tobit_vanilla::reorder(bool bootstrap){
 
   if(bootstrap){
-    uvec boot_indices = randi<uvec>(N, distr_param(0, N-1));
+    uvec boot_indices = randperm(N);
     Y = Y_orig(boot_indices);
     Delta = Delta_orig(boot_indices);
   } else{
