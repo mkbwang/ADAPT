@@ -1,3 +1,3 @@
-# PTDA
+# ADAPT
 
-PTDA: Pooling Tobit Models for Microbiome Differential Abundance Analysis
+ADAPT: Analysis of Microbiome Differential Abundance by Pooling Tobit Models
