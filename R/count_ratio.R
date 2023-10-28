@@ -1,7 +1,7 @@
 
 
 #' Censored Regression for Count Ratios
-#' @useDynLib PTDA
+#' @useDynLib ADAPT
 #' @param otu_table microbiome abundance matrix. All entries are integers
 #' @param metadata sample metadata containing the covariate of interest and confounding factors for adjustment
 #' @param covar the name of the covariate of interest

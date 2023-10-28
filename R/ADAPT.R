@@ -1,7 +1,7 @@
 
 
 #' Pooling Tobit Models for microbiome differential abundance analysis
-#' @useDynLib PTDA
+#' @useDynLib ADAPT
 #' @param otu_table microbiome abundance table generated from 16S rRNA sequencing or shotgun metagenomic sequencing. All entries are integers
 #' @param metadata sample metadata dataframe
 #' @param covar the name of the covariate of interest
@@ -16,9 +16,10 @@
 #' @importFrom stats optim
 #' @importFrom stats median
 #' @importFrom stats p.adjust
+#' @importFrom stats qchisq
 #' @returns the reference feature set, the identified DA features and the p values for all the features
 #' @export
-ptda <- function(otu_table, metadata, covar, adjust=NULL,
+adapt <- function(otu_table, metadata, covar, adjust=NULL,
                  prevalence_cutoff=0.1, depth_cutoff=1000, genes_are_rows=TRUE,
                  boot=TRUE, boot_replicate=1000, n_boot_gene=100, alpha=0.05){
 
@@ -43,7 +44,7 @@ ptda <- function(otu_table, metadata, covar, adjust=NULL,
     # check distribution of p values
     bumfit <- BUM_fit(pvals)
     loglik <- BUM_llk(bumfit$estim_params, pvals[!is.na(pvals)])
-    if (loglik > 2){ # need to continue shrinking reference taxa set
+    if (2*loglik > qchisq(0.95, 1)){ # need to continue shrinking reference taxa set
       distance2med <- abs(estimated_effect - median(estimated_effect, na.rm=T))
       sorted_distance <- sort(distance2med)
       ordered_genenames <- names(sorted_distance)
