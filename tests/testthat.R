@@ -1,4 +1,4 @@
 library(testthat)
-library(PTDA)
+library(ADAPT)
 
-test_check("PTDA")
+test_check("ADAPT")

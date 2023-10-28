@@ -2,10 +2,10 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 cr_estim <- function(Y, Delta, X) {
-    .Call('_PTDA_cr_estim', PACKAGE = 'PTDA', Y, Delta, X)
+    .Call('_ADAPT_cr_estim', PACKAGE = 'ADAPT', Y, Delta, X)
 }
 
 boot_estim <- function(Y, Delta, X, boot_replicate = 500L, n_boot_gene = 100L) {
-    .Call('_PTDA_boot_estim', PACKAGE = 'PTDA', Y, Delta, X, boot_replicate, n_boot_gene)
+    .Call('_ADAPT_boot_estim', PACKAGE = 'ADAPT', Y, Delta, X, boot_replicate, n_boot_gene)
 }
 
