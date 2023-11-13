@@ -16,26 +16,27 @@ using namespace arma;
 struct CRestimate: public RcppParallel::Worker
 {
   // inputs
-  const mat& Y; // matrix of log count ratios between individual taxon and reference
+  const mat& counts; // count matrix
+  const vec& refcounts; // sum of counts in the reference set
   const mat& Delta; // Matrix of indicator whether
   const mat& X; // Covariate matrix
 
   //outputs
   RcppParallel::RMatrix<double> results; //  effect size estimate and test statistic
 
-  CRestimate (const mat& Y, const mat& Delta, const mat& X, NumericMatrix& results):
-      Y(Y), Delta(Delta), X(X), results(results){}
+  CRestimate (const mat& count_mat, const vec& refcounts, const mat& Delta, const mat& X, NumericMatrix& results):
+      counts(count_mat), refcounts(refcounts), Delta(Delta), X(X), results(results){}
 
   void operator()(size_t begin, size_t end){
 
     for(size_t j=begin; j<end;j++){
       try{
-        vec yvec= Y.col(j); // assume that rows are genes and cols are samples
+        vec count_nmt= counts.col(j);
         vec delta_vec = Delta.col(j);
 
-        // first carry out estimation using the real data
-        tobit_firth  tbmodel{yvec, delta_vec, X, 1e-5, 50};
-        int convergence = tbmodel.fit(); // full model
+        // estimation for the full model
+        tobit_firth  tbmodel{count_nmt, refcounts, delta_vec, X, 1e-5, 50};
+        int convergence = tbmodel.fit();
         if(convergence != 0){
           throw std::runtime_error("Full model didn't converge");
         }
@@ -45,7 +46,8 @@ struct CRestimate: public RcppParallel::Worker
         results(j, 0) = beta(1);
         double full_llk = tbmodel.return_llk();
 
-        tbmodel.reset(true, {1}); // reduced model
+        // estimation for the reduced model
+        tbmodel.reset(true, {1});
         convergence = tbmodel.fit();
         if(convergence != 0){
           throw std::runtime_error("Reduced model didn't converge");
@@ -64,7 +66,8 @@ struct CRestimate: public RcppParallel::Worker
 // estimate scaling coefficient for the test statistics
 struct scaleestimate: public RcppParallel::Worker{
   // inputs
-  const mat& Y; // matrix of log count ratios between individual taxon and reference
+  const mat& counts; // count matrix
+  const vec& refcounts; // sum of counts in the reference set
   const mat& Delta; // Matrix of indicator whether
   const mat& X; // Covariate matrix
   const size_t n_sample; // number of samples
@@ -73,19 +76,20 @@ struct scaleestimate: public RcppParallel::Worker{
   //outputs
   RcppParallel::RMatrix<double> scale_results; //  effect size estimate and test statistic
 
-  scaleestimate (const mat& Y, const mat& Delta, const mat& X, const size_t n_boot, NumericMatrix& scale_results):
-    Y(Y), Delta(Delta), X(X), n_sample(X.n_rows), n_boot(n_boot), scale_results(scale_results){}
+  scaleestimate (const mat& count_mat, const vec& refcounts, const mat& Delta, const mat& X, const size_t n_boot, NumericMatrix& scale_results):
+    counts(count_mat), refcounts(refcounts), Delta(Delta), X(X), 
+    n_sample(X.n_rows), n_boot(n_boot), scale_results(scale_results){}
 
 
   void operator()(size_t begin, size_t end){
 
     for(size_t j=begin; j<end;j++){
-        vec yvec= Y.col(j); // assume that rows are genes and cols are samples
+        vec count_nmt= counts.col(j); 
         vec delta_vec = Delta.col(j);
 
         vec teststat(n_boot, fill::zeros);
         vec failure(n_boot, fill::zeros); // numerical failure indicator
-        tobit_firth tbmodel_boot{yvec, delta_vec, X, 1e-5, 50};
+        tobit_firth tbmodel_boot{count_nmt, refcounts, delta_vec, X, 1e-5, 50};
         for (unsigned int k=0; k<n_boot; k++){
           try{
             tbmodel_boot.reorder(true);
@@ -118,12 +122,12 @@ struct scaleestimate: public RcppParallel::Worker{
 
 
 // [[Rcpp::export]]
-NumericMatrix cr_estim(arma::mat& Y, arma::mat& Delta, arma::mat& X) {
+NumericMatrix cr_estim(arma::mat& count_mat, arma::vec& refcounts, arma::mat& Delta, arma::mat& X) {
 
-  size_t n_gene = Y.n_cols;
-  NumericMatrix statinference(n_gene, 3);
-  CRestimate cr_obj(Y, Delta, X, statinference);
-  parallelFor(0, n_gene, cr_obj, 20);
+  size_t n_taxa = count_mat.n_cols;
+  NumericMatrix statinference(n_taxa, 3);
+  CRestimate cr_obj(count_mat, refcounts, Delta, X, statinference);
+  parallelFor(0, n_taxa, cr_obj, 20);
   return statinference;
 
 }
@@ -131,19 +135,19 @@ NumericMatrix cr_estim(arma::mat& Y, arma::mat& Delta, arma::mat& X) {
 
 
 // [[Rcpp::export]]
-NumericMatrix boot_estim(arma::mat& Y, arma::mat& Delta, arma::mat& X, size_t boot_replicate=500, size_t n_boot_gene=100){
+NumericMatrix boot_estim(arma::mat& count_mat, arma::vec& refcounts, arma::mat& Delta, arma::mat& X, size_t boot_replicate=1000, size_t n_boot_taxa=100){
 
-  size_t n_gene = Y.n_cols;
-  size_t n_selected_gene = (n_gene > n_boot_gene)? n_boot_gene : n_gene; // number of subset of genes
+  size_t n_taxa = count_mat.n_cols;
+  size_t n_selected_taxa = (n_taxa > n_boot_taxa)? n_boot_taxa : n_taxa; // number of subset of genes
   // store the results. First column is the gene indices. Second column is the estimates.
-  NumericMatrix scale_chisq(n_selected_gene, 2);
-  uvec indices = (n_gene > n_boot_gene)? randperm(n_gene, n_selected_gene) : linspace<uvec>(0, n_gene-1, n_gene);
+  NumericMatrix scale_chisq(n_selected_taxa, 2);
+  uvec indices = (n_taxa > n_boot_taxa)? randperm(n_taxa, n_selected_taxa) : linspace<uvec>(0, n_taxa-1, n_taxa);
   scale_chisq(_, 0) = as<NumericVector>(wrap(indices));
-  mat subset_Y = Y.cols(indices);
+  mat subset_counts = count_mat.cols(indices);
   mat subset_Delta = Delta.cols(indices);
 
-  scaleestimate chisq_estimate(subset_Y, subset_Delta, X, boot_replicate, scale_chisq);
-  parallelFor(0, n_selected_gene, chisq_estimate, 20);
+  scaleestimate chisq_estimate(subset_counts, refcounts, subset_Delta, X, boot_replicate, scale_chisq);
+  parallelFor(0, n_selected_taxa, chisq_estimate, 20);
 
   // add indices by one for exporting to R
   scale_chisq(_, 0) = scale_chisq(_, 0) + 1;

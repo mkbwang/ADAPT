@@ -9,11 +9,11 @@ count_ratio(
   metadata,
   covar,
   adjust = NULL,
-  refgenes = NULL,
+  reftaxa = NULL,
   test_all = FALSE,
   boot = TRUE,
   boot_replicate = 500,
-  n_boot_gene = 100
+  n_boot_taxa = 100
 )
 }
 \arguments{
@@ -25,7 +25,7 @@ count_ratio(
 
 \item{adjust}{the names of the variables for adjustment, NULL if no adjustments}
 
-\item{refgenes}{the list of reference genes}
+\item{reftaxa}{the list of reference taxa}
 
 \item{test_all}{If true, model the count ratios between all taxa against the reference set; otherwise, only model the relative abundance within the reference set}
 
@@ -33,7 +33,7 @@ count_ratio(
 
 \item{boot_replicate}{number of bootstrap replicates for each gene to estimate scaling factors}
 
-\item{n_boot_gene}{number of genes to apply bootstrap}
+\item{n_boot_taxa}{number of taxa to apply bootstrap}
 }
 \value{
 The effect sizes, standard errors and p values for each taxon

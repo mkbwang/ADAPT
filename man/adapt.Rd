@@ -9,12 +9,12 @@ adapt(
   metadata,
   covar,
   adjust = NULL,
-  prevalence_cutoff = 0.1,
+  prevalence_cutoff = 0.05,
   depth_cutoff = 1000,
-  genes_are_rows = TRUE,
+  taxa_are_rows = TRUE,
   boot = TRUE,
   boot_replicate = 1000,
-  n_boot_gene = 100,
+  n_boot_taxa = 100,
   alpha = 0.05
 )
 }
@@ -27,22 +27,22 @@ adapt(
 
 \item{adjust}{the names of confounders to adjust for, NULL if no adjustment}
 
-\item{prevalence_cutoff}{features whose prevalence are smaller than the cutoff will be excluded from analysis}
+\item{prevalence_cutoff}{taxa whose prevalence are smaller than the cutoff will be excluded from analysis}
 
 \item{depth_cutoff}{a sample would be discarded if its sequencing depth is smaller than the threshold}
 
-\item{genes_are_rows}{whether the microbiome genes are on the column or the row of the abundance table}
+\item{taxa_are_rows}{whether the microbiome taxa are on the column or the row of the abundance table}
 
 \item{boot}{whether to use bootstrap to estimate scaling factors for the test statistics, default TRUE}
 
-\item{boot_replicate}{number of bootstrap replicates for each gene to estimate scaling factors}
+\item{boot_replicate}{number of bootstrap replicates for each taxon to estimate scaling factors}
 
-\item{n_boot_gene}{number of genes to apply bootstrap}
+\item{n_boot_taxa}{number of taxa to apply bootstrap}
 
 \item{alpha}{the cutoff of the adjusted p values}
 }
 \value{
-the reference feature set, the identified DA features and the p values for all the features
+the reference taxa set, the identified differentially abundant taxa and the p values for all the taxa
 }
 \description{
 Pooling Tobit Models for microbiome differential abundance analysis
