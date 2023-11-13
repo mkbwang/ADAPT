@@ -12,8 +12,8 @@
 #' @param boot_replicate number of bootstrap replicates for each gene to estimate scaling factors
 #' @param n_boot_taxa number of taxa to apply bootstrap
 #' @importFrom stats pchisq
-#' @importFrom stats lm
-#' @importFrom stats na.omit
+#' @importFrom stats smooth.spline
+#' @importFrom stats predict
 #' @importFrom Rcpp sourceCpp
 #' @import RcppArmadillo
 #' @import RcppParallel
@@ -58,24 +58,19 @@ count_ratio <- function(otu_table, metadata, covar, adjust=NULL, reftaxa=NULL, t
   if(boot){ # use bootstrap to estimate scaling factor
     chisq_estim <- boot_estim(count_mat=TBD_counts, refcounts=refcounts, Delta=existence, X=design_mat,
                               boot_replicate=boot_replicate, n_boot_taxa=n_boot_taxa)
-    chisq_estim <- na.omit(chisq_estim)
-    scaling_factor <- mean(chisq_estim[, 2])
-    # fit linear model between log teststatistic and log prevalence to decide scaling factors
-    selected_taxa <- chisq_estim[, 1] # column numbers of selected taxa for scale estimation
-    selected_prevalences <- colMeans(existence[, selected_taxa])
-    chisq_estim_df <- data.frame(Taxa = TBDtaxa[selected_taxa],
-                                 teststat = chisq_estim[, 2],
-                                 prev = selected_prevalences)
-    chisq_estim_df$log_teststat <- log(chisq_estim_df$teststat)
-    chisq_estim_df$log_prev <- log(chisq_estim_df$prev)
-    regression <- lm(log_teststat ~ log_prev, data=chisq_estim_df)
-    lm_coefs <- summary(regression)$coefficients
-    scaling_factor <- mean(chisq_estim[, 2], na.rm=T) # default average
+    
+    scaling_factor <- chisq_estim[, 2]
+    if (n_boot_taxa < length(alltaxa)){ # chosen taxa to bootstrap is a subset of all taxa
 
-    if (lm_coefs[2,4] < 0.05){# scaling factors need to be different based on prevalences
-        scaling_factor <- exp(lm_coefs[1,1] + lm_coefs[2,1] * log(CR_result$prevalence))
+      selected_taxa <- chisq_estim[, 1] # column numbers of selected taxa for scale estimation
+      selected_prevalences <- colMeans(existence[, selected_taxa])
+      
+      # fit a cubic spline to impute the scaling factors for the unselected taxa based on prevalence
+      ssfit <- smooth.spline(selected_prevalences, log(scaling_factor))
+      predict_ssfit <- predict(ssfit, CR_result$prevalence)
+      scaling_factor <- exp(predict_ssfit$y)
+      
     }
-
     CR_result$teststat <- CR_result$teststat / scaling_factor
 
   }

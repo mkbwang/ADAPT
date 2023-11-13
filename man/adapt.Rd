@@ -14,7 +14,7 @@ adapt(
   taxa_are_rows = TRUE,
   boot = TRUE,
   boot_replicate = 1000,
-  n_boot_taxa = 100,
+  n_boot_taxa = 1000,
   alpha = 0.05
 )
 }

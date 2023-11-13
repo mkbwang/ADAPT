@@ -10,7 +10,8 @@ null_metadata <- simulated_null_data$metadata
 # use of ADAPT
 begin <- proc.time()
 result_boot <- adapt(otu_table = null_otu_table, metadata=null_metadata,
-                      covar="X1", adjust="X2", taxa_are_rows = TRUE, boot=T)
+                     covar="X1", adjust="X2", taxa_are_rows = TRUE, boot=T,
+                     n_boot_taxa = 1000)
 duration <- proc.time() - begin
 
 
