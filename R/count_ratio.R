@@ -20,7 +20,7 @@
 #' @returns The effect sizes, standard errors and p values for each taxon
 #' @export
 count_ratio <- function(otu_table, metadata, covar, adjust=NULL, reftaxa=NULL, test_all=FALSE,
-                        boot=TRUE, boot_replicate=500, n_boot_taxa=100){
+                        boot=TRUE, boot_replicate=1000, n_boot_taxa=1000){
   alltaxa <- colnames(otu_table)
   if (is.null(reftaxa)) reftaxa <- alltaxa
   TBDtaxa <- NULL
@@ -69,6 +69,7 @@ count_ratio <- function(otu_table, metadata, covar, adjust=NULL, reftaxa=NULL, t
       ssfit <- smooth.spline(selected_prevalences, log(scaling_factor))
       predict_ssfit <- predict(ssfit, CR_result$prevalence)
       scaling_factor <- exp(predict_ssfit$y)
+      scaling_factor[selected_taxa] <- chisq_estim[, 2] # don't impute those that have been estimated
       
     }
     CR_result$teststat <- CR_result$teststat / scaling_factor
