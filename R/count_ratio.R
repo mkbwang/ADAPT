@@ -20,7 +20,7 @@
 #' @returns The effect sizes, standard errors and p values for each taxon
 #' @export
 count_ratio <- function(otu_table, metadata, covar, adjust=NULL, reftaxa=NULL, test_all=FALSE,
-                        boot=TRUE, boot_replicate=1000, n_boot_taxa=1000){
+                        boot=TRUE, boot_replicate=2000, n_boot_taxa=500){
   alltaxa <- colnames(otu_table)
   if (is.null(reftaxa)) reftaxa <- alltaxa
   TBDtaxa <- NULL

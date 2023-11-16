@@ -21,7 +21,7 @@
 #' @export
 adapt <- function(otu_table, metadata, covar, adjust=NULL,
                  prevalence_cutoff=0.05, depth_cutoff=1000, taxa_are_rows=TRUE,
-                 boot=TRUE, boot_replicate=1000, n_boot_taxa=1000, alpha=0.05){
+                 boot=TRUE, boot_replicate=2000, n_boot_taxa=500, alpha=0.05){
 
   if(taxa_are_rows) otu_table <- t(otu_table)
 

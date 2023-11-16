@@ -12,8 +12,8 @@ count_ratio(
   reftaxa = NULL,
   test_all = FALSE,
   boot = TRUE,
-  boot_replicate = 1000,
-  n_boot_taxa = 1000
+  boot_replicate = 2000,
+  n_boot_taxa = 500
 )
 }
 \arguments{

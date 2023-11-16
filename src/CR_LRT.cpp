@@ -135,7 +135,7 @@ NumericMatrix cr_estim(arma::mat& count_mat, arma::vec& refcounts, arma::mat& De
 
 
 // [[Rcpp::export]]
-NumericMatrix boot_estim(arma::mat& count_mat, arma::vec& refcounts, arma::mat& Delta, arma::mat& X, size_t boot_replicate=1000, size_t n_boot_taxa=1000){
+NumericMatrix boot_estim(arma::mat& count_mat, arma::vec& refcounts, arma::mat& Delta, arma::mat& X, size_t boot_replicate=2000, size_t n_boot_taxa=500){
 
   size_t n_taxa = count_mat.n_cols;
   size_t n_selected_taxa = (n_taxa > n_boot_taxa)? n_boot_taxa : n_taxa; // number of subset of genes
