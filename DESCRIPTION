@@ -1,13 +1,13 @@
 Package: ADAPT
 Title: Analysis of Microbiome Differential Abundance by Pooling Tobit Models
-Version: 0.1.0
+Version: 0.1.1
 Authors@R: 
     c(person(given="Mukai", family="Wang", email="wangmk@umich.edu", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-1413-1904")),
       person(given="Simon", family="Fontaine", email="simfont@umich.edu", role = "ctb"),
       person(given="Hui", family="Jiang", email="jianghui@umich.edu", role="ctb"),
       person(given="Gen", family="Li", email="ligen@umich.edu", role=c("aut", "ctb")))
-Description: ADAPT identifies differentially abundant taxa/genes in microbiome metagenomics data(e.g. 16S sequencing and shotgun metagenomics sequencing) by pooling Tobit models for log count ratios. 
+Description: ADAPT identifies differentially abundant taxa in microbiome metagenomics data(e.g. 16S sequencing and shotgun metagenomics sequencing) by pooling Tobit models for log count ratios. 
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)

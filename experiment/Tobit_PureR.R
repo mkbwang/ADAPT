@@ -1,4 +1,4 @@
-
+## Pure R code for estimating tobit models
 
 
 ## hessian(negative information) matrix of Gaussian distribution

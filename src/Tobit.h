@@ -58,6 +58,8 @@ public:
 class tobit_vanilla: public model{
 protected:
   bool isreduced; // whether you are fitting a reduced model
+  vec Nmt; // numerator
+  vec Denom; // denominator
   vec Y_orig; // original response vector (in contrast with potentially bootstrapped Y)
   vec Delta_orig; // original incidence vector (in contrast with potentially boostrapped Delta)
   vec Z; // exp(phi)*Y - X^t rho, dimension N
@@ -74,7 +76,7 @@ protected:
   size_t iter_counter;
   int convergence_code; // an integer representing the convergence codes
 public:
-  tobit_vanilla(const vec& Y_input, const vec& delta_input, const mat&X_input,
+  tobit_vanilla(const vec& Nmt_input, const vec& Denom_input, const vec& delta_input, const mat&X_input,
                 double tolerance = 1e-4, size_t maxiter=50);
   void reset(bool reduced=false, uvec null_indices = {1});
   void reorder(bool bootstrap=false);
@@ -97,7 +99,7 @@ protected:
   vec step_working_score; // most recent step of the score vector
   mat inv_information; // inverse of information matrix
 public:
-  tobit_firth(const vec& Y_input, const vec& delta_input, const mat&X_input,
+  tobit_firth(const vec& Nmt_input, const vec& Denom_input, const vec& delta_input, const mat&X_input,
               double tolerance = 1e-4, size_t maxiter=50);
 
   void update_llk() override;

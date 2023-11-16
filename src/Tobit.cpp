@@ -1,10 +1,14 @@
 #include "Tobit.h"
 
 // First define the functions in the vanilla model
-tobit_vanilla::tobit_vanilla(const vec& Y_input, const vec& delta_input, const mat&X_input,
+tobit_vanilla::tobit_vanilla(const vec& Nmt_input, const vec& Denom_input, const vec& delta_input, const mat&X_input,
                              double tolerance, size_t maxiter):
-  model(Y_input, delta_input, X_input, tolerance, maxiter), Y_orig(Y_input), Delta_orig(delta_input)
+  model(zeros(size(delta_input)), delta_input, X_input, tolerance, maxiter),
+  Nmt(Nmt_input), Denom(Denom_input), Delta_orig(delta_input)
 {
+  Y_orig = -log(Denom);
+  uvec existence_indices = find(Delta_orig > 0);
+  Y_orig.elem(existence_indices) += log(Nmt.elem(existence_indices));
   reorder(false);
   reset();
 }
@@ -36,9 +40,26 @@ void tobit_vanilla::reset(bool reduced, uvec null_indices){
 void tobit_vanilla::reorder(bool bootstrap){
 
   if(bootstrap){
-    uvec boot_indices = randperm(N);
-    Y = Y_orig(boot_indices);
+    uvec boot_indices = randi<uvec>(N, distr_param(0, N-1));
     Delta = Delta_orig(boot_indices);
+    if (all(Delta == 0)){ // do not allow all data to be censored
+      throw std::runtime_error("Absence in all samples");
+    }
+    uvec existence_indices = find(Delta > 0); // samples that are chosen to have observed counts
+    vec boot_Y = Y_orig.elem(boot_indices.elem(existence_indices)); // bootstrapped ratios for nonzero counts
+    vec boot_denom = Denom.elem(existence_indices); // the denominators of the bootstrapped samples with nonzero counts
+    vec boot_counts = round(boot_denom % exp(boot_Y)); // the nonzero counts of the bootstrapped samples
+    if (all(boot_counts == 0)){ // do not allow all data to be censored
+      throw std::runtime_error("Absence in all samples");
+    }
+    // filter out the extra sampling zeros
+    existence_indices = existence_indices.elem(find(boot_counts > 0));
+    boot_counts = boot_counts.elem(find(boot_counts > 0));
+    // modify the existence vector
+    Delta = zeros(N);
+    Delta.elem(existence_indices) = ones(existence_indices.n_elem);
+    Y = -log(Denom);
+    Y.elem(existence_indices) += log(boot_counts);
   } else{
     Y = Y_orig;
     Delta = Delta_orig;
@@ -163,9 +184,9 @@ double tobit_vanilla::return_prevalences() {
 }
 
 // extra functions/overrides for tobit_firth
-tobit_firth::tobit_firth(const arma::vec &Y_input, const arma::vec &delta_input, const arma::mat &X_input,
+tobit_firth::tobit_firth(const vec& Nmt_input, const vec& Denom_input, const arma::vec &delta_input, const arma::mat &X_input,
                          double tolerance, size_t maxiter):
-  tobit_vanilla(Y_input, delta_input, X_input, tolerance, maxiter){
+  tobit_vanilla(Nmt_input, Denom_input, delta_input, X_input, tolerance, maxiter){
   deriv_3z = vec(N, fill::zeros);
   step_working_score = vec(subindices.n_elem, fill::zeros);
   hessian = tobit_vanilla_hessian();
