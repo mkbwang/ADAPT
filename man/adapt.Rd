@@ -5,39 +5,28 @@
 \title{Pooling Tobit Models for microbiome differential abundance analysis}
 \usage{
 adapt(
-  otu_table,
+  input_data,
   metadata,
-  covar,
-  adjust = NULL,
-  prevalence_cutoff = 0.05,
-  depth_cutoff = 1000,
-  taxa_are_rows = TRUE,
-  boot = TRUE,
-  boot_replicate = 2000,
-  n_boot_taxa = 500,
+  cond.var,
+  ref.cond = NULL,
+  adj.var = NULL,
+  prev.filter = 0.05,
+  depth.filter = 1000,
   alpha = 0.05
 )
 }
 \arguments{
-\item{otu_table}{microbiome abundance table generated from 16S rRNA sequencing or shotgun metagenomic sequencing. All entries are integers}
+\item{input_data}{a phyloseq object}
 
-\item{metadata}{sample metadata dataframe}
+\item{cond.var}{the variable representing the conditions to compare, a character string}
 
-\item{covar}{the name of the covariate of interest}
+\item{ref.cond}{the condition chosen as baseline. This is only used when the condition is categorical.}
 
-\item{adjust}{the names of confounders to adjust for, NULL if no adjustment}
+\item{adj.var}{the names of the variables to be adjusted, a vector of character strings}
 
-\item{prevalence_cutoff}{taxa whose prevalence are smaller than the cutoff will be excluded from analysis}
+\item{prev.filter}{taxa whose prevalences are smaller than the cutoff will be excluded from analysis, default 0.05}
 
-\item{depth_cutoff}{a sample would be discarded if its sequencing depth is smaller than the threshold}
-
-\item{taxa_are_rows}{whether the microbiome taxa are on the column or the row of the abundance table}
-
-\item{boot}{whether to use bootstrap to estimate scaling factors for the test statistics, default TRUE}
-
-\item{boot_replicate}{number of bootstrap replicates for each taxon to estimate scaling factors}
-
-\item{n_boot_taxa}{number of taxa to apply bootstrap}
+\item{depth.filter}{a sample would be discarded if its library size is smaller than the threshold}
 
 \item{alpha}{the cutoff of the adjusted p values}
 }

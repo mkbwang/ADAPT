@@ -25,26 +25,9 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// boot_estim
-NumericMatrix boot_estim(arma::mat& count_mat, arma::vec& refcounts, arma::mat& Delta, arma::mat& X, size_t boot_replicate, size_t n_boot_taxa);
-RcppExport SEXP _ADAPT_boot_estim(SEXP count_matSEXP, SEXP refcountsSEXP, SEXP DeltaSEXP, SEXP XSEXP, SEXP boot_replicateSEXP, SEXP n_boot_taxaSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< arma::mat& >::type count_mat(count_matSEXP);
-    Rcpp::traits::input_parameter< arma::vec& >::type refcounts(refcountsSEXP);
-    Rcpp::traits::input_parameter< arma::mat& >::type Delta(DeltaSEXP);
-    Rcpp::traits::input_parameter< arma::mat& >::type X(XSEXP);
-    Rcpp::traits::input_parameter< size_t >::type boot_replicate(boot_replicateSEXP);
-    Rcpp::traits::input_parameter< size_t >::type n_boot_taxa(n_boot_taxaSEXP);
-    rcpp_result_gen = Rcpp::wrap(boot_estim(count_mat, refcounts, Delta, X, boot_replicate, n_boot_taxa));
-    return rcpp_result_gen;
-END_RCPP
-}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_ADAPT_cr_estim", (DL_FUNC) &_ADAPT_cr_estim, 4},
-    {"_ADAPT_boot_estim", (DL_FUNC) &_ADAPT_boot_estim, 6},
     {NULL, NULL, 0}
 };
 

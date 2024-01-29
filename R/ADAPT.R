@@ -2,41 +2,95 @@
 
 #' Pooling Tobit Models for microbiome differential abundance analysis
 #' @useDynLib ADAPT
-#' @param otu_table microbiome abundance table generated from 16S rRNA sequencing or shotgun metagenomic sequencing. All entries are integers
-#' @param metadata sample metadata dataframe
-#' @param covar the name of the covariate of interest
-#' @param adjust the names of confounders to adjust for, NULL if no adjustment
-#' @param prevalence_cutoff taxa whose prevalence are smaller than the cutoff will be excluded from analysis
-#' @param depth_cutoff a sample would be discarded if its sequencing depth is smaller than the threshold
-#' @param taxa_are_rows whether the microbiome taxa are on the column or the row of the abundance table
-#' @param boot whether to use bootstrap to estimate scaling factors for the test statistics, default TRUE
-#' @param boot_replicate number of bootstrap replicates for each taxon to estimate scaling factors
-#' @param n_boot_taxa number of taxa to apply bootstrap
+#' @param input_data a phyloseq object
+#' @param cond.var the variable representing the conditions to compare, a character string
+#' @param ref.cond the condition chosen as baseline. This is only used when the condition is categorical.
+#' @param adj.var the names of the variables to be adjusted, a vector of character strings
+#' @param prev.filter taxa whose prevalences are smaller than the cutoff will be excluded from analysis, default 0.05
+#' @param depth.filter a sample would be discarded if its library size is smaller than the threshold
 #' @param alpha the cutoff of the adjusted p values
 #' @importFrom stats optim
 #' @importFrom stats median
 #' @importFrom stats p.adjust
 #' @importFrom stats qchisq
-#' @returns the reference taxa set, the identified differentially abundant taxa and the p values for all the taxa
+#' @returns a DAresult type object contains the input and the output. Use summary and plot to explore the output
 #' @export
-adapt <- function(otu_table, metadata, covar, adjust=NULL,
-                 prevalence_cutoff=0.05, depth_cutoff=1000, taxa_are_rows=TRUE,
-                 boot=TRUE, boot_replicate=2000, n_boot_taxa=500, alpha=0.05){
+adapt <- function(input_data, metadata, cond.var, ref.cond = NULL, adj.var=NULL,
+                 prev.filter=0.05, depth.filter=1000, alpha=0.05){
+  
+  # check if input data type is phyloseq
+  if (class(input_data)[1] != "phyloseq"){
+    stop("Input data isn't a phyloseq object!")
+  }
+  # filter phyloseq object based on taxa prevalence and sequencing depth
+  subset_data <- filter_taxa(input_data, function(x) mean(x>0) > prev.filter, TRUE)
+  subset_data <- prune_samples(sample_sums(subset_data) > depth.filter, subset_data)
+  
+  # check if the variables exist in the metadata
+  metadata <- data.frame(sample_data(subset_data))
+  allcols <- colnames(metadata)
+  if (class(cond.var) != "character"){
+    stop("The main variable name for conditions need to be a string.")
+  }
+  if (class(adj.var) != "character" & class(adj.var) != "NULL"){
+    stop("The variables for adjustments should be either NULL or a vector of character strings.")
+  }
+  selected_cols <- c(cond.var, adj.var)
+  if (!all(selected_cols %in% allcols)){
+    unavailable_cols <- selected_cols[!selected_cols %in% allcols]
+    stop(sprintf("Some columns are not available in the metadata! (%s)", 
+                 paste(unavailable_cols, collapse=",")))
+  }
+  # dichotomize categorical variables if selected, set up design matrix
+  if (any(is.na(metadata))){
+    stop("No missing data allowed in the metadata!")
+  }
+  main_variable <- metadata[, cond.var]
+  if (length(unique(main_variable)) == 1){
+    stop("All samples share the same condition!")
+  }
+  if (!is.numeric(main_variable)){
+    if (is.null(ref.cond) | !ref.cond %in% main_variable){
+      ref.cond <- unique(main_variable)[1]
+    }
+    cat(sprintf("Choose '%s' as the reference condition\n", ref.cond))
+    main_variable <- main_variable != ref.cond
+    if (length(unique(main_variable)) == 2){
+      others <- unique(main_variable)[2]
+    } else{
+      others <- "others"
+    }
+    cond.var <- sprintf("%s_%sVS%s", cond.var, others, ref.cond)
+  }
+  adjustments <- NULL
+  if (!is.null(adj.var)){
+    adjustments <- metadata[, adj.var, drop=F]
+    adjustments<- model.matrix(~., data=adjustments)
+    adjustments<- adjustments[, -1] # remove intercept
+  }
+  complete_design_matrix <- cbind(1, main_variable, adjustments)
+  
+  # parse the count matrix and edit the count_ratio function
+  count_table <- otu_table(subset_data)
+  if (taxa_are_rows(subset_data)){
+    count_table <- t(count_table)
+  }
 
-  if(taxa_are_rows) otu_table <- t(otu_table)
-
-  # filter out rare taxa and samples with low sequencing depths
-  prevalences <- colMeans(otu_table != 0)
-  depths <- rowSums(otu_table)
-  otu_table_filtered <- otu_table[depths > depth_cutoff, prevalences > prevalence_cutoff]
-  taxa_names <- colnames(otu_table_filtered)
+  if (any(is.na(count_table))){
+    stop("No missing data allowed in the count table!")
+  }
+  
+  cat(sprintf("%d taxa and %d samples being analyzed...\n", 
+              ncol(count_table), nrow(count_table)))
+  
+  taxonomies <- tax_table(subset_data)
+  
+  taxa_names <- rownames(taxonomies)
   reftaxa <- taxa_names # initially all the taxa are reference taxa(relative abundance)
-  # cat("Selecting Reference Set...")
+  cat("Selecting Reference Set...")
   while(1){
-    relabd_output <- count_ratio(otu_table = otu_table_filtered, metadata = metadata,
-                                  covar=covar, adjust=adjust, reftaxa = reftaxa, test_all=FALSE,
-                                 boot=F)
-    relabd_result <- relabd_output$CR_result
+    relabd_result <- count_ratio(count_table = count_table, design_matrix = complete_design_matrix,
+                                  reftaxa = reftaxa, test_all=FALSE)
     estimated_effect <- relabd_result$effect
     pvals <- relabd_result$pval
     names(pvals) <- relabd_result$Taxa
@@ -49,21 +103,16 @@ adapt <- function(otu_table, metadata, covar, adjust=NULL,
       sorted_distance <- sort(distance2med)
       ordered_taxanames <- names(sorted_distance)
       reftaxa <- ordered_taxanames[1:(length(ordered_taxanames)/2)]
-      # cat("Shrink Reference Set...")
     } else{
       break
     }
   }
-  # cat("Reference Set Selected, model count ratio of all the genes against reference set ...")
-    # after finding the reference set, model the count ratios of all the genes against the reference set
-  final_output <- count_ratio(otu_table = otu_table_filtered, metadata = metadata,
-                              covar=covar, adjust=adjust, reftaxa = reftaxa, test_all=T,
-                              boot=boot, boot_replicate=boot_replicate, n_boot_taxa=n_boot_taxa)
-  all_CR_results <- final_output$CR_result
+  cat(sprintf("%d taxa selected as reference\n", length(reftaxa)))
+  all_CR_results <- count_ratio(count_table=count_table, design_matrix=complete_design_matrix,
+                                reftaxa=reftaxa, test_all=T)
 
   all_pvals <- all_CR_results$pval
   names(all_pvals) <- all_CR_results$Taxa
-  # find p value cutoff for 0.05 FDR
   all_adjusted_pvals <- p.adjust(all_pvals, method="BH")
   all_CR_results$adjusted_pval <- all_adjusted_pvals
 
@@ -73,11 +122,13 @@ adapt <- function(otu_table, metadata, covar, adjust=NULL,
   } else{
     DiffTaxa <- c()
   }
+  cat(sprintf("%d DA taxa detected\n", length(DiffTaxa)))
+  output <- new("DAresult", 
+                reference=reftaxa, 
+                signal=DiffTaxa,
+                details=all_CR_results,
+                input=input_data)
 
-  result <- list(Reference_Taxa = reftaxa,
-                 DA_Taxa = DiffTaxa,
-                 P_Value = all_CR_results)
-
-  return(result)
+  invisible(output)
 }
 

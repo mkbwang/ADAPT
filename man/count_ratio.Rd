@@ -4,36 +4,16 @@
 \alias{count_ratio}
 \title{Censored Regression for Count Ratios}
 \usage{
-count_ratio(
-  otu_table,
-  metadata,
-  covar,
-  adjust = NULL,
-  reftaxa = NULL,
-  test_all = FALSE,
-  boot = TRUE,
-  boot_replicate = 2000,
-  n_boot_taxa = 500
-)
+count_ratio(count_table, design_matrix, reftaxa = NULL, test_all = FALSE)
 }
 \arguments{
-\item{otu_table}{microbiome abundance matrix. All entries are integers}
+\item{count_table}{microbiome abundance matrix. All entries are integers}
 
-\item{metadata}{sample metadata containing the covariate of interest and confounding factors for adjustment}
-
-\item{covar}{the name of the covariate of interest}
-
-\item{adjust}{the names of the variables for adjustment, NULL if no adjustments}
+\item{design_matrix}{the design matrix of covariates}
 
 \item{reftaxa}{the list of reference taxa}
 
 \item{test_all}{If true, model the count ratios between all taxa against the reference set; otherwise, only model the relative abundance within the reference set}
-
-\item{boot}{whether to use bootstrap to estimate scaling factors for the test statistics, default TRUE}
-
-\item{boot_replicate}{number of bootstrap replicates for each gene to estimate scaling factors}
-
-\item{n_boot_taxa}{number of taxa to apply bootstrap}
 }
 \value{
 The effect sizes, standard errors and p values for each taxon
