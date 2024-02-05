@@ -9,13 +9,11 @@
 #' @param prev.filter taxa whose prevalences are smaller than the cutoff will be excluded from analysis, default 0.05
 #' @param depth.filter a sample would be discarded if its library size is smaller than the threshold
 #' @param alpha the cutoff of the adjusted p values
-#' @importFrom stats optim
-#' @importFrom stats median
-#' @importFrom stats p.adjust
-#' @importFrom stats qchisq
+#' @importFrom stats optim median p.adjust qchisq model.matrix
+#' @importFrom phyloseq filter_taxa prune_samples otu_table sample_data taxa_are_rows sample_sums
 #' @returns a DAresult type object contains the input and the output. Use summary and plot to explore the output
 #' @export
-adapt <- function(input_data, metadata, cond.var, ref.cond = NULL, adj.var=NULL,
+adapt <- function(input_data, cond.var, ref.cond = NULL, adj.var=NULL,
                  prev.filter=0.05, depth.filter=1000, alpha=0.05){
   
   # check if input data type is phyloseq
@@ -83,9 +81,10 @@ adapt <- function(input_data, metadata, cond.var, ref.cond = NULL, adj.var=NULL,
   cat(sprintf("%d taxa and %d samples being analyzed...\n", 
               ncol(count_table), nrow(count_table)))
   
-  taxonomies <- tax_table(subset_data)
+
+  taxa_names <- colnames(count_table)
+
   
-  taxa_names <- rownames(taxonomies)
   reftaxa <- taxa_names # initially all the taxa are reference taxa(relative abundance)
   cat("Selecting Reference Set...")
   while(1){
@@ -123,6 +122,7 @@ adapt <- function(input_data, metadata, cond.var, ref.cond = NULL, adj.var=NULL,
     DiffTaxa <- c()
   }
   cat(sprintf("%d DA taxa detected\n", length(DiffTaxa)))
+  if(is.null(DiffTaxa)) DiffTaxa <- ""
   output <- new("DAresult", 
                 reference=reftaxa, 
                 signal=DiffTaxa,

@@ -6,7 +6,6 @@
 \usage{
 adapt(
   input_data,
-  metadata,
   cond.var,
   ref.cond = NULL,
   adj.var = NULL,
@@ -31,7 +30,7 @@ adapt(
 \item{alpha}{the cutoff of the adjusted p values}
 }
 \value{
-the reference taxa set, the identified differentially abundant taxa and the p values for all the taxa
+a DAresult type object contains the input and the output. Use summary and plot to explore the output
 }
 \description{
 Pooling Tobit Models for microbiome differential abundance analysis

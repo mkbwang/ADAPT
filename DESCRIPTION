@@ -1,6 +1,6 @@
 Package: ADAPT
 Title: Analysis of Microbiome Differential Abundance by Pooling Tobit Models
-Version: 0.1.1
+Version: 0.2.0
 Authors@R: 
     c(person(given="Mukai", family="Wang", email="wangmk@umich.edu", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-1413-1904")),
@@ -15,7 +15,9 @@ RoxygenNote: 7.2.3
 Imports:
     Rcpp,
     RcppArmadillo,
-    RcppParallel
+    RcppParallel,
+    phyloseq,
+    methods
 Suggests: 
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
@@ -23,5 +25,13 @@ LinkingTo:
     Rcpp,
     RcppArmadillo,
     RcppParallel
+biocViews: 
+    DifferentialExpression, 
+    Microbiome, 
+    Normalization, 
+    Sequencing, 
+    Metagenomics,
+    Software
 Depends: 
     R (>= 3.5.0)
+LazyData: true
