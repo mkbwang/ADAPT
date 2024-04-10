@@ -3,6 +3,7 @@
 #' @importFrom methods setClass
 setClass("DAresult",
          slots=c(
+           DAAname="character",
            reference="character",
            signal="character",
            details="data.frame",

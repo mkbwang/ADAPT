@@ -1,30 +1,41 @@
 
 rm(list=ls())
-library(ADAPT)
+# library(ADAPT)
 library(dplyr)
 
 load("R/sysdata.rda")
-count_table <- simulated_null_data$otu_table
-metadata <- simulated_null_data$metadata
-rownames(count_table) <- sprintf("ASV%d", seq(1, 500))
-colnames(count_table) <- sprintf("Indv%d", seq(1, 129))
-rownames(metadata) <- sprintf("Indv%d", seq(1, 129))
-null_data <- phyloseq(otu_table(count_table, taxa_are_rows = T), sample_data(metadata))
-save(null_data, file="R/sysdata.rda")
 
-ecc16s_12 <- readRDS("experiment/phyasv_visit12.rds")
-ecc_metag <- readRDS("experiment/phy_metag_plaque.rds")
+# null test case
+null_results <- adapt(input_data=phyobj_null, 
+                      cond.var="main", adj.var=c("confounder"))
+result1 <- null_results@details
+result2 <- null_results@details
+FPR <- mean(null_results@details$pval < 0.05)
 
-metadata <- sample_data(ecc_metag)
+# balanced test case
+phyobj_balanced <- balanced_case$phyobj
+balanced_truth <- balanced_case$truth
+balanced_results <- adapt(input_data=phyobj_balanced, 
+                      cond.var="main", adj.var=c("confounder"))
+signals <- balanced_results@signal
+true_signals <- balanced_truth$taxaname[balanced_truth$isDA]
+FDR_balanced <- 1-mean(signals %in% true_signals)
 
-usethis::use_data(ecc16s_12)
-usethis::use_data(ecc_metag)
+# unbalanced test case
+phyobj_unbalanced <- unbalanced_case$phyobj
+unbalanced_truth <- unbalanced_case$truth
+unbalanced_results <- adapt(input_data=phyobj_unbalanced, 
+                          cond.var="main", adj.var="confounder")
+signals <- unbalanced_results@signal
+true_signals <- unbalanced_truth$taxaname[unbalanced_truth$isDA]
+FDR_unbalanced <- 1-mean(signals %in% true_signals)
 
-null_results <- adapt(input_data=null_data, cond.var="X1", adj.var=c("X2"))
 
-realdata_results_1 <- adapt(input_data=ecc16s_12, cond.var="CaseEver", adj.var=c("geo_loc_name", "host_sex"),
-                 ref.cond="Control")
+load("data/ecc_saliva.rda")
+# saliva DAA
+realdata_results_1 <- adapt(input_data=ecc_saliva, cond.var="CaseStatus", ref.cond="Control")
 
-realdata_results_2 <- adapt(input_data=ecc_plaque_metag, cond.var="CaseStatus",
-      ref.cond="Control")
+# plaque DAA
+load("data/ecc_plaque.rda")
+realdata_results_2 <- adapt(input_data=ecc_plaque, cond.var="CaseStatus", ref.cond="Case")
 
