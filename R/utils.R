@@ -22,20 +22,6 @@ setValidity("DAresult", function(object) {
 
 
 
-setGeneric("name", function(x) standardGeneric("name"))
-setGeneric("name<-", function(x, value) standardGeneric("name<-"))
-
-setMethod("name", "DAresult", function(x) {
-  x@DAAname
-})
-
-setMethod("name<-", "DAresult", function(x, value) {
-  x@DAAname <- value
-  validObject(x)
-  return(x)
-})
-
-# TODO: show, summary and plot
 #' @importFrom phyloseq nsamples
 setMethod("show", "DAresult", function(object){
   
@@ -105,12 +91,64 @@ setMethod("summary", "DAresult", function(object, select=c("all", "da", "ref")){
   invisible(combined_result)
   
 })
-# 
-# 
-# setMethod("plot", "DAresult", function(x, n.label=5){
-#   
-# })
-# 
-# 
+
+#' @importFrom ggplot2 ggplot aes geom_point xlab ylab element_text .data
+#' @importFrom ggplot2 theme_bw theme scale_color_manual geom_vline
+#' @importFrom ggrepel geom_label_repel
+setMethod("plot", "DAresult", function(x, n.label=5){
+  
+  n.label <- as.integer(n.label)
+  stopifnot(n.label >= 0)
+  
+  model_details <- x@details
+  ## just in case some taxa are too rare to be estimated
+  model_details <- model_details[!is.na(model_details$teststat), ]
+  ## calculate negative log10 p value
+  model_details$neglog10pval <- -log10(model_details$pval)
+  title_x <- sprintf("Log10 Fold Change for %s", x@DAAname)
+  
+  generated_plot <- NULL
+  # first generate basic plot
+  if(x@signal[1] != ""){ # has DA taxa
+    model_details$isDA <- FALSE
+    model_details[x@signal, "isDA"] <- TRUE
+    
+    if(n.label > 0){
+      n.label <- min(n.label, length(x@signal))
+      index_withlabels <- which(rank(model_details$pval) <= n.label)
+      model_details$label <- ""
+      model_details$label[index_withlabels] <- model_details$Taxa[index_withlabels]
+    }
+    
+    generated_plot <- ggplot(model_details, aes(x=.data$log10foldchange, y=.data$neglog10pval))+
+      geom_point(alpha=0.8, aes(color=.data$isDA)) +
+      xlab(title_x) + ylab("-Log10 p-value") + theme_bw() + 
+      theme(legend.position="none", axis.title=element_text(size=10), 
+            axis.text=element_text(size=10)) + 
+      scale_color_manual(values=c("#616161", "#ff0066")) +
+      geom_vline(xintercept=0, linetype="dashed", color = "blue")
+    
+    if (n.label > 0){ # add labels
+      generated_plot <- generated_plot + 
+        geom_label_repel(aes(label = .data$label),
+                         size=2,
+                         max.overlaps = 20,
+                         box.padding   = 0.35,
+                         point.padding = 0.5,
+                         segment.color = 'grey50')
+    }
+    
+  } else{ # no DA taxa
+    generated_plot <- ggplot(model_details, aes(x=.data$log10foldchange, y=.data$neglog10pval)) + 
+      geom_point(alpha=0.8, color="#616161") + 
+      xlab(title_x) + ylab("-Log10 p-value") + theme_bw() + 
+      theme(axis.title=element_text(size=10), axis.text=element_text(size=10)) + 
+      geom_vline(xintercept=0, linetype="dashed", color = "blue")
+  }
+  
+  return(generated_plot)
+  
+})
+
 
 
