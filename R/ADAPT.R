@@ -4,93 +4,34 @@
 #' @useDynLib ADAPT
 #' @param input_data a phyloseq object
 #' @param cond.var the variable representing the conditions to compare, a character string
-#' @param ref.cond the condition chosen as baseline. This is only used when the condition is categorical.
+#' @param base.cond the condition chosen as baseline. This is only used when the condition is categorical.
 #' @param adj.var the names of the variables to be adjusted, a vector of character strings
+#' @param censor the value to censor at for zero counts, default 1
 #' @param prev.filter taxa whose prevalences are smaller than the cutoff will be excluded from analysis, default 0.05
 #' @param depth.filter a sample would be discarded if its library size is smaller than the threshold
 #' @param alpha the cutoff of the adjusted p values
-#' @importFrom stats optim median p.adjust qchisq model.matrix
-#' @importFrom phyloseq filter_taxa prune_samples otu_table sample_data taxa_are_rows sample_sums
+#' @importFrom stats optim median p.adjust qchisq
 #' @returns a DAresult type object contains the input and the output. Use summary and plot to explore the output
 #' @export
-adapt <- function(input_data, cond.var, ref.cond = NULL, adj.var=NULL,
+adapt <- function(input_data, cond.var, base.cond = NULL, adj.var=NULL, censor=1,
                  prev.filter=0.05, depth.filter=1000, alpha=0.05){
   
-  # check if input data type is phyloseq
-  if (class(input_data)[1] != "phyloseq"){
-    stop("Input data isn't a phyloseq object!")
-  }
-  # filter phyloseq object based on taxa prevalence and sequencing depth
-  subset_data <- filter_taxa(input_data, function(x) mean(x>0) > prev.filter, TRUE)
-  subset_data <- prune_samples(sample_sums(subset_data) > depth.filter, subset_data)
+  # preprocess input phyloseq object
+  preprocessed_output <- preprocess(input_data, cond.var, base.cond, adj.var, prev.filter, depth.filter)
   
-  # check if the variables exist in the metadata
-  metadata <- data.frame(sample_data(subset_data))
-  allcols <- colnames(metadata)
-  if (class(cond.var) != "character"){
-    stop("The main variable name for conditions need to be a string.")
-  }
-  if (class(adj.var) != "character" & class(adj.var) != "NULL"){
-    stop("The variables for adjustments should be either NULL or a vector of character strings.")
-  }
-  selected_cols <- c(cond.var, adj.var)
-  if (!all(selected_cols %in% allcols)){
-    unavailable_cols <- selected_cols[!selected_cols %in% allcols]
-    stop(sprintf("Some columns are not available in the metadata! (%s)", 
-                 paste(unavailable_cols, collapse=",")))
-  }
-  # dichotomize categorical variables if selected, set up design matrix
-  if (any(is.na(metadata))){
-    stop("No missing data allowed in the metadata!")
-  }
-  main_variable <- metadata[, cond.var]
-  if (length(unique(main_variable)) == 1){
-    stop("All samples share the same condition!")
-  }
-  if (!is.numeric(main_variable)){
-    if (is.null(ref.cond) | !ref.cond %in% main_variable){
-      ref.cond <- unique(main_variable)[1]
-    }
-    cat(sprintf("Choose '%s' as the reference condition\n", ref.cond))
-    main_variable <- main_variable != ref.cond
-    if (length(unique(main_variable)) == 2){
-      others <- unique(main_variable)[2]
-    } else{
-      others <- "others"
-    }
-    cond.var <- sprintf("%s_%sVS%s", cond.var, others, ref.cond)
-  }
-  adjustments <- NULL
-  if (!is.null(adj.var)){
-    adjustments <- metadata[, adj.var, drop=F]
-    adjustments<- model.matrix(~., data=adjustments)
-    adjustments<- adjustments[, -1] # remove intercept
-  }
-  complete_design_matrix <- cbind(1, main_variable, adjustments)
+  count_table <- preprocessed_output$count_table
+  complete_design_matrix <- preprocessed_output$design_matrix
+  DAAname <- preprocessed_output$DAAname
   
-  # parse the count matrix and edit the count_ratio function
-  count_table <- otu_table(subset_data)
-  if (taxa_are_rows(subset_data)){
-    count_table <- t(count_table)
-  }
-
-  if (any(is.na(count_table))){
-    stop("No missing data allowed in the count table!")
-  }
-  
-  cat(sprintf("%d taxa and %d samples being analyzed...\n", 
-              ncol(count_table), nrow(count_table)))
-  
-
   taxa_names <- colnames(count_table)
 
   
   reftaxa <- taxa_names # initially all the taxa are reference taxa(relative abundance)
-  cat("Selecting Reference Set...")
+  cat("Selecting Reference Set... ")
   while(1){
     relabd_result <- count_ratio(count_table = count_table, design_matrix = complete_design_matrix,
-                                  reftaxa = reftaxa, test_all=FALSE)
-    estimated_effect <- relabd_result$effect
+                                  censor = censor, reftaxa = reftaxa, test_all=FALSE)
+    estimated_effect <- relabd_result$log10foldchange
     pvals <- relabd_result$pval
     names(pvals) <- relabd_result$Taxa
     names(estimated_effect) <- relabd_result$Taxa
@@ -108,7 +49,7 @@ adapt <- function(input_data, cond.var, ref.cond = NULL, adj.var=NULL,
   }
   cat(sprintf("%d taxa selected as reference\n", length(reftaxa)))
   all_CR_results <- count_ratio(count_table=count_table, design_matrix=complete_design_matrix,
-                                reftaxa=reftaxa, test_all=T)
+                                censor = censor, reftaxa=reftaxa, test_all=T)
 
   all_pvals <- all_CR_results$pval
   names(all_pvals) <- all_CR_results$Taxa
@@ -121,9 +62,10 @@ adapt <- function(input_data, cond.var, ref.cond = NULL, adj.var=NULL,
   } else{
     DiffTaxa <- c()
   }
-  cat(sprintf("%d DA taxa detected\n", length(DiffTaxa)))
+  cat(sprintf("%d differentially abundant taxa detected\n", length(DiffTaxa)))
   if(is.null(DiffTaxa)) DiffTaxa <- ""
-  output <- new("DAresult", 
+  output <- new("DAresult",
+                DAAname=DAAname,
                 reference=reftaxa, 
                 signal=DiffTaxa,
                 details=all_CR_results,

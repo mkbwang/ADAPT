@@ -15,8 +15,6 @@
 
 
 
-
-
 #' Whole genome sequencing of plaque samples collected from infants after 36 months old
 #'
 #' A phyloseq object with 30 samples and 610 taxa. The samples are collected from plaque of children at 36, 48 or 60 months old

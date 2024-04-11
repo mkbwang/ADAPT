@@ -4,7 +4,13 @@
 \alias{count_ratio}
 \title{Censored Regression for Count Ratios}
 \usage{
-count_ratio(count_table, design_matrix, reftaxa = NULL, test_all = FALSE)
+count_ratio(
+  count_table,
+  design_matrix,
+  reftaxa = NULL,
+  censor = 1,
+  test_all = FALSE
+)
 }
 \arguments{
 \item{count_table}{microbiome abundance matrix. All entries are integers}
@@ -12,6 +18,8 @@ count_ratio(count_table, design_matrix, reftaxa = NULL, test_all = FALSE)
 \item{design_matrix}{the design matrix of covariates}
 
 \item{reftaxa}{the list of reference taxa}
+
+\item{censor}{the value to censor at for zero counts}
 
 \item{test_all}{If true, model the count ratios between all taxa against the reference set; otherwise, only model the relative abundance within the reference set}
 }

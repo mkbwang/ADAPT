@@ -7,8 +7,9 @@
 adapt(
   input_data,
   cond.var,
-  ref.cond = NULL,
+  base.cond = NULL,
   adj.var = NULL,
+  censor = 1,
   prev.filter = 0.05,
   depth.filter = 1000,
   alpha = 0.05
@@ -19,9 +20,11 @@ adapt(
 
 \item{cond.var}{the variable representing the conditions to compare, a character string}
 
-\item{ref.cond}{the condition chosen as baseline. This is only used when the condition is categorical.}
+\item{base.cond}{the condition chosen as baseline. This is only used when the condition is categorical.}
 
 \item{adj.var}{the names of the variables to be adjusted, a vector of character strings}
+
+\item{censor}{the value to censor at for zero counts, default 1}
 
 \item{prev.filter}{taxa whose prevalences are smaller than the cutoff will be excluded from analysis, default 0.05}
 
