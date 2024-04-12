@@ -1,15 +1,8 @@
 
 
-#' Preprocess input phyloseq data to get count table and metadata design matrix
-#' @param input_data a phyloseq object
-#' @param cond.var the variable representing the conditions to compare, a character string
-#' @param base.cond the condition chosen as baseline. This is only used when the condition is categorical.
-#' @param adj.var the names of the variables to be adjusted, a vector of character strings
-#' @param prev.filter taxa whose prevalences are smaller than the cutoff will be excluded from analysis
-#' @param depth.filter a sample would be discarded if its library size is smaller than the threshold
+
 #' @importFrom phyloseq filter_taxa prune_samples otu_table sample_data taxa_are_rows sample_sums
 #' @importFrom stats model.matrix
-#' @returns a list with count table, metadata design matrix and DAA name
 preprocess <- function(input_data, cond.var, base.cond, adj.var, prev.filter, depth.filter){
   
   # check if input data type is phyloseq

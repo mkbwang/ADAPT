@@ -3,25 +3,27 @@
 \docType{data}
 \name{ecc_plaque}
 \alias{ecc_plaque}
-\title{Whole genome sequencing of plaque samples collected from infants after 36 months old}
+\title{Plaque samples from early childhood dental caries studies}
 \format{
-\subsection{\code{ecc_plaque}}{
-
-The metadata has three columns
+The metadata of \code{ecc_plaque} has two columns
 \describe{
 \item{CaseStatus}{Whether the kids had dental caries}
 \item{Site}{The location of sample collection (Site 1 or Site 2).}
 }
 }
-}
 \source{
-The original publication of this data is "Evaluating the ecological hypothesis: early life salivary microbiome assembly predicts dental caries in a longitudinal case-control study" (Blostein etal, 2022). The sequence data are available under Project number PRJNA752888.
+The original publication of this data is "Evaluating the ecological
+hypothesis: early life salivary microbiome assembly predicts dental caries
+in a longitudinal case-control study" (Blostein etal, 2022).
+The sequence data are available under Project number PRJNA752888.
 }
 \usage{
-ecc_plaque
+data(ecc_plaque)
 }
 \description{
-A phyloseq object with 30 samples and 610 taxa. The samples are collected from plaque of children at 36, 48 or 60 months old
+A phyloseq object with 30 samples and 610 taxa for whole genome sequencing of plaque samples.
+The samples were collected from children at 36, 48 or 60 months old.
 15 samples were from teeth with dental lesions and 15 samples were controls.
+The samples of cases were collected at the onset visit.
 }
 \keyword{datasets}

@@ -1,6 +1,25 @@
 # class and methods for ADAPT result
 
+#' Differential abundance analysis result
+#' 
+#' @description
+#' An S4 class to represent ADAPT analysis results
+#' 
+#' @details
+#' The analysis result object contains the analysis name, reference taxa, DA taxa,
+#' detailed analysis results as a dataframe and the input phyloseq object.
+#' The analysis name contains the condition variable. The reference taxa `reference`
+#' must be nonempty. DA taxa `signal` may be an empty string if no taxa are differentially abundant.
+#' The `details` dataframe contains the taxa names, the prevalence of taxa, the estimated
+#' log10 absolute abundance fold changes, the raw hypothesis test p-values and BH-adjusted p-values.
+#' 
+#' @slot DAAname The name of differential abundance analysis
+#' @slot reference A vector of taxa names corresponding to all the reference taxa
+#' @slot signal A vector of taxa names corresponding to all the DA taxa
+#' @slot details A dataframe with the analysis results for all taxa
+#' @slot input Input phyloseq object
 #' @importFrom methods setClass
+#' @export
 setClass("DAresult",
          slots=c(
            DAAname="character",
@@ -36,7 +55,29 @@ setMethod("show", "DAresult", function(object){
   
 })
 
+#' Summary of differential abundance analysis 
+#'
+#' @description
+#' Summary function for `DAresult` type object
+#' 
+#' @details 
+#' This customized summary function reports the dimension of input count table,
+#' number of reference taxa and number of differentially abundant taxa. It also returns
+#' a data frame with the detailed analysis result and taxonomy of all the taxa. The
+#' user can choose to only get the detailed analysis result of DA taxa or the reference taxa
+#' through the `select` parameter.
+#' 
+#' @param object analysis result in `DAresult` type
+#' @param select Taxa whose results to be returned, can be all the taxa ("all"),
+#' only the differentially abundant taxa ("da") or reference taxa ("ref").
+#' @returns A dataframe with detailed analysis results
+#' @export
 #' @importFrom phyloseq nsamples tax_table
+#' @examples
+#' data(ecc_saliva)
+#' saliva_results <- adapt(input_data=ecc_saliva, cond.var="CaseStatus", 
+#'        base.cond="Control", adj.var="Site")
+#' summary(saliva_results, select="da")
 setMethod("summary", "DAresult", function(object, select=c("all", "da", "ref")){
   
   select <- match.arg(select)
@@ -92,9 +133,29 @@ setMethod("summary", "DAresult", function(object, select=c("all", "da", "ref")){
   
 })
 
+#' Plotting differential abundance analysis results
+#' 
+#' @description
+#' Volcano plot of ADAPT results
+#' 
+#' @details
+#' The customized plot function for `DAresult` type object generates a volcano plot with
+#' the differentially abundant taxa highlighted. The users can decide how many taxa with 
+#' the smallest p-values are labeled on the plot.
+#' 
+#' @param x analysis result in `DAresult` type
+#' @param n.label Number of taxa to label on the plot. Note that no taxa will be labeled if
+#' no DA taxa.
+#' @returns A ggplot object of the volcano plot 
 #' @importFrom ggplot2 ggplot aes geom_point xlab ylab element_text .data
 #' @importFrom ggplot2 theme_bw theme scale_color_manual geom_vline
 #' @importFrom ggrepel geom_label_repel
+#' @export
+#' @examples
+#' data(ecc_saliva)
+#' saliva_results <- adapt(input_data=ecc_saliva, cond.var="CaseStatus", 
+#'        base.cond="Control", adj.var="Site")
+#' plot(saliva_results, n.label=10)
 setMethod("plot", "DAresult", function(x, n.label=5){
   
   n.label <- as.integer(n.label)

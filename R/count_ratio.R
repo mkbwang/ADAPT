@@ -1,18 +1,12 @@
 
 
-#' Censored Regression for Count Ratios
+
 #' @useDynLib ADAPT
-#' @param count_table microbiome abundance matrix. All entries are integers
-#' @param design_matrix the design matrix of covariates
-#' @param reftaxa the list of reference taxa
-#' @param censor the value to censor at for zero counts
-#' @param test_all If true, model the count ratios between all taxa against the reference set; otherwise, only model the relative abundance within the reference set
 #' @importFrom stats pchisq
 #' @importFrom stats smooth.spline
 #' @importFrom stats predict
 #' @import RcppArmadillo
 #' @import RcppParallel
-#' @returns The effect sizes, standard errors and p values for each taxon
 count_ratio <- function(count_table, design_matrix, reftaxa=NULL, censor=1, test_all=FALSE){
   alltaxa <- colnames(count_table)
   if (is.null(reftaxa)) reftaxa <- alltaxa

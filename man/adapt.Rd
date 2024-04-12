@@ -2,7 +2,7 @@
 % Please edit documentation in R/ADAPT.R
 \name{adapt}
 \alias{adapt}
-\title{Pooling Tobit Models for microbiome differential abundance analysis}
+\title{ADAPT}
 \usage{
 adapt(
   input_data,
@@ -33,8 +33,37 @@ adapt(
 \item{alpha}{the cutoff of the adjusted p values}
 }
 \value{
-a DAresult type object contains the input and the output. Use summary and plot to explore the output
+a \code{DAresult} type object contains the input and the output. Use summary and plot to explore the output
 }
 \description{
-Pooling Tobit Models for microbiome differential abundance analysis
+Analysis of microbiome differential abundance by pooling tobit models
+}
+\details{
+ADAPT takes in a metagenomics count table as a phyloseq object.
+The phyloseq object needs to have metadata containing
+at least one variable \code{cond.var} representing the conditions that the user is testing on.
+The condition variable \code{cond.var} can be numeric (as a continuous variable) or character (representing categorical variable).
+ADAPT does not support multigroup comparison yet. If there are multiple conditions,
+the user can specify the condition to single out through \code{base.cond}. ADAPT then carry out DAA between
+the selected \code{base.cond} and all the others. ADAPT allows adjusting for other covariates. The
+user can specify all the covariates to adjust for by specifying \code{adj.var} with a vector of variable names.
+
+Differential abundance analysis may be too challenging for rare taxa and samples with too low sequencing depth.
+The users can filter out taxa whose prevalences are lower than \code{prev.filter} (default 0.05). The users
+can also filter out samples whose sequencing depths (library sizes) are smaller than \code{depth.filter} (default 1000).
+
+One major feature of ADAPT is treating zero counts as left censored observations and use Tobit models for log count ratios.
+The zero counts by default are left censored at one. The users can change the value to censor at through \code{censor}.
+Change the cutoff of BH-adjusted p-values with \code{alpha} (default 0.05) for calling DA taxa.
+
+The returned value of \code{adapt} is a customized S4 type called \code{DAresult}. We have developed two helper functions \code{summary}
+and \code{plot} for this special data type.
+}
+\examples{
+data(ecc_plaque)
+plaque_results <- adapt(input_data=ecc_plaque, cond.var="CaseStatus", 
+       base.cond="case")
+data(ecc_saliva)
+saliva_results <- adapt(input_data=ecc_saliva, cond.var="CaseStatus", 
+       base.cond="Control", adj.var="Site")
 }
