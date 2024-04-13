@@ -7,20 +7,22 @@ Authors@R:
       person(given="Simon", family="Fontaine", email="simfont@umich.edu", role = "ctb"),
       person(given="Hui", family="Jiang", email="jianghui@umich.edu", role="ctb"),
       person(given="Gen", family="Li", email="ligen@umich.edu", role=c("aut", "ctb")))
-Description: ADAPT identifies differentially abundant taxa in microbiome metagenomics data(e.g. 16S sequencing and shotgun metagenomics sequencing) by pooling Tobit models for log count ratios. 
+Description: ADAPT identifies differentially abundant taxa in microbiome metagenomics data(e.g. 16S sequencing and shotgun metagenomics sequencing) between conditions.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.2
 Imports:
-    Rcpp,
-    RcppArmadillo,
-    RcppParallel,
-    phyloseq,
+    Rcpp (>= 1.0.8),
+    RcppArmadillo (>= 0.10.8),
+    RcppParallel (>= 5.1.5),
+    phyloseq (>= 1.39.0),
     methods,
-    ggplot2,
-    ggrepel
+    ggplot2 (>= 3.4.1),
+    ggrepel (>= 0.9.1)
 Suggests: 
+    rmarkdown (>= 2.11),
+    knitr (>= 1.37),
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
 LinkingTo:
@@ -35,5 +37,6 @@ biocViews:
     Metagenomics,
     Software
 Depends: 
-    R (>= 3.5.0)
+    R (>= 4.0.0)
 LazyData: false
+VignetteBuilder: knitr

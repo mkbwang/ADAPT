@@ -7,7 +7,6 @@
 *_files/
 *.html
 *.pdf
-*.Rmd
 *.csv
 *.xls
 *.rds
@@ -18,8 +17,3 @@
 *.tsv
 *.so
 *.o
-*_Model_Summary/
-*_plots/
-archived_GLMM/
-*/data/
-CAARS/
