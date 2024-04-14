@@ -2,48 +2,68 @@
 % Please edit documentation in R/ADAPT.R
 \name{adapt}
 \alias{adapt}
-\title{Pooling Tobit Models for microbiome differential abundance analysis}
+\title{ADAPT}
 \usage{
 adapt(
-  otu_table,
-  metadata,
-  covar,
-  adjust = NULL,
-  prevalence_cutoff = 0.05,
-  depth_cutoff = 1000,
-  taxa_are_rows = TRUE,
-  boot = TRUE,
-  boot_replicate = 2000,
-  n_boot_taxa = 500,
+  input_data,
+  cond.var,
+  base.cond = NULL,
+  adj.var = NULL,
+  censor = 1,
+  prev.filter = 0.05,
+  depth.filter = 1000,
   alpha = 0.05
 )
 }
 \arguments{
-\item{otu_table}{microbiome abundance table generated from 16S rRNA sequencing or shotgun metagenomic sequencing. All entries are integers}
+\item{input_data}{a phyloseq object}
 
-\item{metadata}{sample metadata dataframe}
+\item{cond.var}{the variable representing the conditions to compare, a character string}
 
-\item{covar}{the name of the covariate of interest}
+\item{base.cond}{the condition chosen as baseline. This is only used when the condition is categorical.}
 
-\item{adjust}{the names of confounders to adjust for, NULL if no adjustment}
+\item{adj.var}{the names of the variables to be adjusted, a vector of character strings}
 
-\item{prevalence_cutoff}{taxa whose prevalence are smaller than the cutoff will be excluded from analysis}
+\item{censor}{the value to censor at for zero counts, default 1}
 
-\item{depth_cutoff}{a sample would be discarded if its sequencing depth is smaller than the threshold}
+\item{prev.filter}{taxa whose prevalences are smaller than the cutoff will be excluded from analysis, default 0.05}
 
-\item{taxa_are_rows}{whether the microbiome taxa are on the column or the row of the abundance table}
-
-\item{boot}{whether to use bootstrap to estimate scaling factors for the test statistics, default TRUE}
-
-\item{boot_replicate}{number of bootstrap replicates for each taxon to estimate scaling factors}
-
-\item{n_boot_taxa}{number of taxa to apply bootstrap}
+\item{depth.filter}{a sample would be discarded if its library size is smaller than the threshold}
 
 \item{alpha}{the cutoff of the adjusted p values}
 }
 \value{
-the reference taxa set, the identified differentially abundant taxa and the p values for all the taxa
+a \code{DAresult} type object contains the input and the output. Use summary and plot to explore the output
 }
 \description{
-Pooling Tobit Models for microbiome differential abundance analysis
+Analysis of microbiome differential abundance by pooling tobit models
+}
+\details{
+ADAPT takes in a metagenomics count table as a phyloseq object.
+The phyloseq object needs to have metadata containing
+at least one variable \code{cond.var} representing the conditions that the user is testing on.
+The condition variable \code{cond.var} can be numeric (as a continuous variable) or character (representing categorical variable).
+ADAPT does not support multigroup comparison yet. If there are multiple conditions,
+the user can specify the condition to single out through \code{base.cond}. ADAPT then carry out DAA between
+the selected \code{base.cond} and all the others. ADAPT allows adjusting for other covariates. The
+user can specify all the covariates to adjust for by specifying \code{adj.var} with a vector of variable names.
+
+Differential abundance analysis may be too challenging for rare taxa and samples with too low sequencing depth.
+The users can filter out taxa whose prevalences are lower than \code{prev.filter} (default 0.05). The users
+can also filter out samples whose sequencing depths (library sizes) are smaller than \code{depth.filter} (default 1000).
+
+One major feature of ADAPT is treating zero counts as left censored observations and use Tobit models for log count ratios.
+The zero counts by default are left censored at one. The users can change the value to censor at through \code{censor}.
+Change the cutoff of BH-adjusted p-values with \code{alpha} (default 0.05) for calling DA taxa.
+
+The returned value of \code{adapt} is a customized S4 type called \code{DAresult}. We have developed two helper functions \code{summary}
+and \code{plot} for this special data type.
+}
+\examples{
+data(ecc_plaque)
+plaque_results <- adapt(input_data=ecc_plaque, cond.var="CaseStatus", 
+       base.cond="case")
+data(ecc_saliva)
+saliva_results <- adapt(input_data=ecc_saliva, cond.var="CaseStatus", 
+       base.cond="Control", adj.var="Site")
 }

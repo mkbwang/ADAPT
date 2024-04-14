@@ -5,7 +5,3 @@ cr_estim <- function(count_mat, refcounts, Delta, X) {
     .Call('_ADAPT_cr_estim', PACKAGE = 'ADAPT', count_mat, refcounts, Delta, X)
 }
 
-boot_estim <- function(count_mat, refcounts, Delta, X, boot_replicate = 2000L, n_boot_taxa = 500L) {
-    .Call('_ADAPT_boot_estim', PACKAGE = 'ADAPT', count_mat, refcounts, Delta, X, boot_replicate, n_boot_taxa)
-}
-

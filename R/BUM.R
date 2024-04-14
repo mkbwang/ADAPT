@@ -41,17 +41,3 @@ BUM_fit <- function(pvals, ...) {
 }
 
 
-## test
-
-# library(ClassComparison)
-#
-# example <- c(rbeta(n=500, shape1=2, shape2=1), runif(n=500))
-#
-# original_fit <- Bum(example)
-# sum(log(likelihoodBum(original_fit)))
-#
-#
-# new_fit <- BUM_fit(example)
-# BUM_llk(new_fit$estim_params, example)
-#
-

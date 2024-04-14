@@ -6,9 +6,7 @@ tobit_vanilla::tobit_vanilla(const vec& Nmt_input, const vec& Denom_input, const
   model(zeros(size(delta_input)), delta_input, X_input, tolerance, maxiter),
   Nmt(Nmt_input), Denom(Denom_input), Delta_orig(delta_input)
 {
-  Y_orig = -log(Denom);
-  uvec existence_indices = find(Delta_orig > 0);
-  Y_orig.elem(existence_indices) += log(Nmt.elem(existence_indices));
+  Y_orig = log(Nmt)-log(Denom);
   reorder(false);
   reset();
 }
