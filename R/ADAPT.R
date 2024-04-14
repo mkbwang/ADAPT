@@ -73,17 +73,17 @@ adapt <- function(input_data, cond.var, base.cond = NULL, adj.var=NULL, censor=1
     bumfit <- BUM_fit(pvals)
     loglik <- BUM_llk(bumfit$estim_params, pvals[!is.na(pvals)])
     if (2*loglik > qchisq(0.95, 1)){ # need to continue shrinking reference taxa set
-      distance2med <- abs(estimated_effect - median(estimated_effect, na.rm=T))
+      distance2med <- abs(estimated_effect - median(estimated_effect, na.rm=TRUE))
       sorted_distance <- sort(distance2med)
       ordered_taxanames <- names(sorted_distance)
-      reftaxa <- ordered_taxanames[1:(length(ordered_taxanames)/2)]
+      reftaxa <- ordered_taxanames[seq_len(length(ordered_taxanames)/2)]
     } else{
       break
     }
   }
   cat(sprintf("%d taxa selected as reference\n", length(reftaxa)))
   all_CR_results <- count_ratio(count_table=count_table, design_matrix=complete_design_matrix,
-                                censor = censor, reftaxa=reftaxa, test_all=T)
+                                censor = censor, reftaxa=reftaxa, test_all=TRUE)
 
   all_pvals <- all_CR_results$pval
   names(all_pvals) <- all_CR_results$Taxa

@@ -6,9 +6,7 @@
 preprocess <- function(input_data, cond.var, base.cond, adj.var, prev.filter, depth.filter){
   
   # check if input data type is phyloseq
-  if (class(input_data)[1] != "phyloseq"){
-    stop("Input data isn't a phyloseq object!")
-  }
+  stopifnot("Input data isn't a phyloseq object!" = is(input_data, 'phyloseq'))
   # filter phyloseq object based on taxa prevalence and sequencing depth
   subset_data <- filter_taxa(input_data, function(x) mean(x>0) > prev.filter, TRUE)
   subset_data <- prune_samples(sample_sums(subset_data) > depth.filter, subset_data)
@@ -16,12 +14,12 @@ preprocess <- function(input_data, cond.var, base.cond, adj.var, prev.filter, de
   # check if the variables exist in the metadata
   metadata <- data.frame(sample_data(subset_data))
   allcols <- colnames(metadata)
-  if (class(cond.var) != "character"){
-    stop("The main variable name for conditions need to be a string.")
-  }
-  if (class(adj.var) != "character" & class(adj.var) != "NULL"){
-    stop("The variables for adjustments should be either NULL or a vector of character strings.")
-  }
+  stopifnot("The main variable name for conditions need to be a string." = 
+              is(cond.var, "character"))
+
+  stopifnot("The variables for adjustments should be either NULL or a vector of character strings." = 
+              is(adj.var, "character") | is(adj.var, "NULL"))
+
   selected_cols <- c(cond.var, adj.var)
   if (!all(selected_cols %in% allcols)){
     unavailable_cols <- selected_cols[!selected_cols %in% allcols]
@@ -53,7 +51,7 @@ preprocess <- function(input_data, cond.var, base.cond, adj.var, prev.filter, de
   }
   adjustments <- NULL
   if (!is.null(adj.var)){
-    adjustments <- metadata[, adj.var, drop=F]
+    adjustments <- metadata[, adj.var, drop=FALSE]
     adjustments<- model.matrix(~., data=adjustments)
     adjustments<- adjustments[, -1] # remove intercept
   }

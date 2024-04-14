@@ -1,13 +1,16 @@
 Package: ADAPT
 Title: Analysis of Microbiome Differential Abundance by Pooling Tobit Models
-Version: 0.2.0
+Version: 0.99.0
 Authors@R: 
     c(person(given="Mukai", family="Wang", email="wangmk@umich.edu", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-1413-1904")),
       person(given="Simon", family="Fontaine", email="simfont@umich.edu", role = "ctb"),
       person(given="Hui", family="Jiang", email="jianghui@umich.edu", role="ctb"),
       person(given="Gen", family="Li", email="ligen@umich.edu", role=c("aut", "ctb")))
-Description: ADAPT identifies differentially abundant taxa in microbiome metagenomics data(e.g. 16S sequencing and shotgun metagenomics sequencing) between conditions.
+Description: ADAPT carries out differential abundance analysis for microbiome metagenomics data in phyloseq format.
+  It has two innovations. One is to treat zero counts as left censored and use Tobit models for log count ratios.
+  The other is an innovative way to find non-differentially abundant taxa as reference, then use the reference taxa to 
+  find the differentially abundant ones.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
@@ -18,6 +21,7 @@ Imports:
     RcppParallel (>= 5.1.5),
     phyloseq (>= 1.39.0),
     methods,
+    stats,
     ggplot2 (>= 3.4.1),
     ggrepel (>= 0.9.1)
 Suggests: 
@@ -35,8 +39,9 @@ biocViews:
     Normalization, 
     Sequencing, 
     Metagenomics,
-    Software
+    Software,
+    MultipleComparison
 Depends: 
-    R (>= 4.0.0)
+    R (>= 4.1.0)
 LazyData: false
 VignetteBuilder: knitr

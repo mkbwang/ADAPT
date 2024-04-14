@@ -5,8 +5,9 @@
 #' @importFrom stats pchisq
 #' @importFrom stats smooth.spline
 #' @importFrom stats predict
+#' @importFrom Rcpp sourceCpp
 #' @import RcppArmadillo
-#' @import RcppParallel
+#' @importFrom RcppParallel RcppParallelLibs
 count_ratio <- function(count_table, design_matrix, reftaxa=NULL, censor=1, test_all=FALSE){
   alltaxa <- colnames(count_table)
   if (is.null(reftaxa)) reftaxa <- alltaxa
