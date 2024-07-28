@@ -26,11 +26,12 @@ preprocess <- function(input_data, cond.var, base.cond, adj.var, prev.filter, de
     stop(sprintf("Some columns are not available in the metadata! (%s)", 
                  paste(unavailable_cols, collapse=",")))
   }
+  subset_metadata <- metadata[, c(cond.var, adj.var), drop=FALSE]
   # dichotomize categorical variables if selected, set up design matrix
-  if (any(is.na(metadata))){
+  if (any(is.na(subset_metadata))){
     stop("No missing data allowed in the metadata!")
   }
-  main_variable <- metadata[, cond.var]
+  main_variable <- subset_metadata[, cond.var]
   if (length(unique(main_variable)) == 1){
     stop("All samples share the same condition!")
   }
@@ -51,7 +52,7 @@ preprocess <- function(input_data, cond.var, base.cond, adj.var, prev.filter, de
   }
   adjustments <- NULL
   if (!is.null(adj.var)){
-    adjustments <- metadata[, adj.var, drop=FALSE]
+    adjustments <- subset_metadata[, adj.var, drop=FALSE]
     adjustments<- model.matrix(~., data=adjustments)
     adjustments<- adjustments[, -1] # remove intercept
   }

@@ -22,6 +22,7 @@ count_ratio <- function(count_table, design_matrix, reftaxa=NULL, censor=1, test
   # remove the samples with zero counts in the reference set
   null_filter <- refcounts != 0
   refcounts <- refcounts[null_filter] # denominator
+  subset_designmatrix <- design_matrix[null_filter, ]
   TBD_counts <- count_table[null_filter, TBDtaxa, drop=FALSE]
   existence <- 1*(TBD_counts > 0) # indicator matrices of zero counts
   TBD_counts[TBD_counts == 0] <- censor
@@ -37,7 +38,7 @@ count_ratio <- function(count_table, design_matrix, reftaxa=NULL, censor=1, test
                                pval=0)
 
   estimation_result <- cr_estim(count_mat=TBD_counts, refcounts=refcounts, 
-                                Delta=existence, X=design_matrix)
+                                Delta=existence, X=subset_designmatrix)
   CR_result$log10foldchange <- estimation_result[, 1] / log(10)
   CR_result$teststat <- estimation_result[, 2]
   CR_result$log10foldchange[estimation_result[, 3] == 1] <- NA # some taxa may be too rare for statistical inference
