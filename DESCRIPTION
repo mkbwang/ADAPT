@@ -1,6 +1,6 @@
 Package: ADAPT
 Title: Analysis of Microbiome Differential Abundance by Pooling Tobit Models
-Version: 0.99.0
+Version: 0.99.1
 Authors@R: 
     c(person(given="Mukai", family="Wang", email="wangmk@umich.edu", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-1413-1904")),
