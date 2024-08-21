@@ -2,12 +2,20 @@
 
 ## Installation
 
-To install the package with the vignette generated, type in R console
+There are two ways of installing the package. One is through the GitHub repository and the other is through the Bioconductor repository.
 
 ```{r, eval=FALSE}
-install.packages("devtools")
-library(devtools)
-install_github("mkbwang/ADAPT", build_vignettes=TRUE)
+# install Bioconductor first
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+# the first way is to install from GitHub
+if (!require("ADAPT"))
+    BiocManager::install("mkbwang/ADAPT", build_vignettes = TRUE)
+
+# the second way is install from Bioconductor repository
+if (!require("ADAPT"))
+    BiocManager::install("ADAPT", version="devel", build_vignettes = TRUE)
 ```
 The installation may take around five minutes.
 

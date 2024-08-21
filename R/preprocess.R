@@ -7,6 +7,9 @@ preprocess <- function(input_data, cond.var, base.cond, adj.var, prev.filter, de
   
   # check if input data type is phyloseq
   stopifnot("Input data isn't a phyloseq object!" = is(input_data, 'phyloseq'))
+  # check the prevalence threshold and the sequencing depth threshold
+  stopifnot("The prevalence filter (prev.filter) has to be a positive number between 0 and 1!" = prev.filter >=0 & prev.filter < 1)
+  stopifnot("The sequencing depth filter (depth.filter) has to be a nonnegative number!" = depth.filter >= 0)
   # filter phyloseq object based on taxa prevalence and sequencing depth
   subset_data <- filter_taxa(input_data, function(x) mean(x>0) > prev.filter, TRUE)
   subset_data <- prune_samples(sample_sums(subset_data) > depth.filter, subset_data)
