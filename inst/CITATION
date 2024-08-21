@@ -1,0 +1,9 @@
+bibentry(
+  bibtype  = "Article",
+  title    = "ADAPT: Analysis of Microbiome Differential Abundance by Pooling Tobit Models",
+  author   = "Mukai Wang, Simon Fontaine, Hui Jiang, Gen Li",
+  journal  = "bioRxiv",
+  year     = 2024,
+  header   = "To cite ADAPT in publications, please use:",
+  doi      = "https://doi.org/10.1101/2024.05.14.594186"
+)

@@ -25,6 +25,18 @@ This is the tutorial for `ADAPT` (analysis of microbiome differential abundance 
 knitr::include_graphics('./flowchart.png')
 ```
 
+There are two ways to install the package, either through GitHub or Bioconductor.
+
+```{r, eval=FALSE}
+# install through GitHub
+if(!require("ADAPT")) BiocManager::install("mkbwang/ADAPT", build_vignettes = TRUE)
+
+# install through Bioconductor
+if(!require("ADAPT")) BiocManager::install("ADAPT", version="devel", 
+                                           build_vignettes = TRUE)
+
+```
+
 # Main function `adapt`
 
 The main function `adapt` takes in a phyloseq [@phyloseq] object that needs to have at least a count table and a sample metadata. The metadata must contain one variable that represents the condition to test on. We currently allow binary and continuous conditions. If there are more than two groups for the condition variable, the user may single out one group to compare with all the others for DAA. `ADAPT` allows adjusting for extra covariates. There are eight arguments in the `adapt` function: 

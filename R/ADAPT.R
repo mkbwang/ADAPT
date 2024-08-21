@@ -53,6 +53,10 @@ adapt <- function(input_data, cond.var, base.cond = NULL, adj.var=NULL, censor=1
   # preprocess input phyloseq object
   preprocessed_output <- preprocess(input_data, cond.var, base.cond, adj.var, prev.filter, depth.filter)
   
+  # check if the arguments are valid
+  stopifnot("The zero counts need to be censored at a positive number!" = censor > 0)
+  stopifnot("The cutoff for adjusted p-values needs to be between 0 and 0.5!" = alpha > 0 & alpha < 0.5)
+  
   count_table <- preprocessed_output$count_table
   complete_design_matrix <- preprocessed_output$design_matrix
   DAAname <- preprocessed_output$DAAname

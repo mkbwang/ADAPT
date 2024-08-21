@@ -17,5 +17,6 @@
 *.tsv
 *.so
 *.o
+*.Rproj
 experiment/
 .Rbuildignore
