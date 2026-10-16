@@ -10,6 +10,6 @@
 # CXX_STD = CXX11
 PKG_LIBS = $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)
 strippedLib: $(SHLIB)
-		if test -e "/usr/bin/strip"; then /usr/bin/strip --strip-debug $(SHLIB); fi
+		if test -e "/usr/bin/strip"; then /usr/bin/strip -S $(SHLIB); fi
 
 .phony: strippedLib
